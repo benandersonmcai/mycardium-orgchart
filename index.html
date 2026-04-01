@@ -50,8 +50,41 @@
     #toolbar button:hover { background: var(--bg); color: var(--text); }
     #people-count { font-size: 12px; color: var(--muted); margin-left: auto; }
 
-    #chart-scroll { overflow: auto; padding: 32px 40px 60px; cursor: grab; }
+    #chart-scroll { overflow: auto; padding: 32px 40px 60px; cursor: grab; user-select: none; }
     #chart-scroll:active { cursor: grabbing; }
+
+    /* Spotlight overlay */
+    #spotlight-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 400;
+      align-items: center; justify-content: center;
+    }
+    #spotlight-card {
+      background: var(--card); border-radius: 14px;
+      padding: 28px; width: 340px; max-width: 90vw;
+      position: relative;
+    }
+    #spotlight-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; font-size: 22px;
+      cursor: pointer; color: var(--muted); line-height: 1;
+    }
+    .sp-avatar { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 14px; }
+    .sp-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .sp-role { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+    .sp-section { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 14px 0 8px; }
+    .sp-field { display: flex; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+    .sp-label { color: var(--muted); width: 80px; flex-shrink: 0; }
+    .sp-val a { color: var(--blue); text-decoration: none; }
+    .sp-reports { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .sp-report-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--bg);
+      font-size: 12px; cursor: pointer;
+    }
+    .sp-report-chip:hover { border-color: var(--blue); background: var(--blue-light); }
+    .sp-chip-av { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; flex-shrink: 0; }
     #chart-wrap { transform-origin: top left; transition: transform 0.15s ease; }
     #chart-canvas { position: relative; display: inline-block; }
     #chart-canvas svg.lines { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
@@ -181,6 +214,14 @@
     <div id="search-results"></div>
   </div>
 </main>
+
+<!-- Spotlight overlay -->
+<div id="spotlight-overlay">
+  <div id="spotlight-card">
+    <button id="spotlight-close">×</button>
+    <div id="spotlight-content"></div>
+  </div>
+</div>
 
 <!-- Minimap -->
 <div id="minimap-wrap">
@@ -394,7 +435,7 @@ function toggleNode(id){
 }
 
 function selectNode(id){
-  selectedId=id; renderChart(); showDetail(id);
+  selectedId=id; renderChart(); showSpotlight(id);
 }
 
 // ── Data load ─────────────────────────────────────────────────

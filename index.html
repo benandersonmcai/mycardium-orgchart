@@ -400,7 +400,7 @@ function renderChart(){
     card.style.left=p.x+"px";
     card.style.top=p.y+"px";
     card.innerHTML=`<div class="node-avatar" style="background:${aColor(node.id)};">${initials(node.displayName)}</div><div class="node-text"><div class="node-name">${esc(node.displayName)}</div><div class="node-title">${esc(node.jobTitle||node.department||"—")}</div></div>`;
-    card.addEventListener("click",()=>selectNode(node.id));
+    card.addEventListener("click", ()=>{ selectedId=node.id; renderChart(); showSpotlight(node.id); });
     canvas.appendChild(card);
 
     // toggle button (centred below card)
@@ -410,7 +410,7 @@ function renderChart(){
       btn.style.left=(p.x+NODE_W/2-TOGGLE_R)+"px";
       btn.style.top=(p.y+NODE_H-TOGGLE_R)+"px";
       btn.textContent=expanded.has(node.id)?"−":"+"+node.reports.length;
-      btn.addEventListener("click",e=>{ e.stopPropagation(); toggleNode(node.id); });
+      btn.addEventListener("click", e=>{ e.stopPropagation(); if(expanded.has(node.id)) expanded.delete(node.id); else expanded.add(node.id); renderChart(); });
       canvas.appendChild(btn);
     }
 

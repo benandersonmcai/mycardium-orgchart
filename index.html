@@ -64,7 +64,8 @@
     #chart-ui { display: none; }
     #toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 24px 0; flex-wrap: wrap; }
     #people-count { font-size: 12px; color: var(--muted); margin-left: auto; }
-    #refresh-btn { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; color: var(--muted); }
+    #refresh-btn, #expand-all-btn, #collapse-all-btn { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; color: var(--muted); }
+    #expand-all-btn:hover, #collapse-all-btn:hover, #refresh-btn:hover { background: var(--bg); }
 
     /* ── Org tree canvas ── */
     #chart-scroll { overflow: auto; padding: 32px 24px 60px; }
@@ -109,6 +110,8 @@
       z-index: 10; line-height: 1;
     }
     .expand-btn:hover { background: var(--blue-light); border-color: var(--blue); }
+    /* remove top connector line artefact */
+    .node-box::before { display: none; }
 
     /* ── Connectors ── */
     .connector-down { width: 1.5px; background: var(--line); }
@@ -168,6 +171,8 @@
   <div id="chart-ui">
     <div id="toolbar">
       <button id="refresh-btn">↺ Refresh</button>
+      <button id="expand-all-btn">⊞ Expand all</button>
+      <button id="collapse-all-btn">⊟ Collapse all</button>
       <span id="people-count"></span>
     </div>
     <div id="chart-scroll">
@@ -309,8 +314,8 @@ function renderTree(node, depth) {
     const lineY = GAP_Y;
     const midX = node._w/2;
 
-    // vertical line down from node
-    html += `<div style="display:flex;justify-content:center;"><div style="width:2px;height:${GAP_Y/2}px;background:#d1d5db;"></div></div>`;
+    // vertical line down from node — no gap, overlaps expand btn
+    html += `<div style="display:flex;justify-content:center;margin-top:-1px;"><div style="width:2px;height:${GAP_Y/2 + 11}px;background:#d1d5db;"></div></div>`;
 
     // SVG horizontal connector bar
     if (node.reports.length > 1) {
@@ -443,6 +448,15 @@ async function init() {
   $("sign-in-btn").addEventListener("click", signIn);
   $("sign-out-btn").addEventListener("click", signOut);
   $("refresh-btn").addEventListener("click", loadData);
+  $("expand-all-btn").addEventListener("click", () => {
+    function expAll(n) { if(n.reports.length){ expandedIds.add(n.id); n.reports.forEach(expAll); } }
+    roots.forEach(expAll); renderChart();
+  });
+  $("collapse-all-btn").addEventListener("click", () => {
+    expandedIds.clear();
+    roots.forEach(r => expandedIds.add(r.id)); // keep top level open
+    selectedId=null; hide("detail-panel"); renderChart();
+  });
   $("detail-close").addEventListener("click", ()=>{ hide("detail-panel"); selectedId=null; renderChart(); });
   let t;
   $("search-bar").addEventListener("input", e=>{ clearTimeout(t); t=setTimeout(()=>doSearch(e.target.value),200); });

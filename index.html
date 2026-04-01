@@ -41,8 +41,8 @@
     const SCOPES = ["User.Read", "User.ReadBasic.All", "People.Read.All"];
   </script>
 
-  <!-- Microsoft Authentication Library (MSAL) -->
-  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
+  <!-- Microsoft Authentication Library (MSAL) via unpkg -->
+  <script src="https://unpkg.com/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -421,7 +421,6 @@ const msalConfig = {
 };
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
-await msalInstance.initialize();
 
 // ─── State ────────────────────────────────────────────────────
 let allUsers = [];
@@ -676,7 +675,8 @@ async function init() {
 
 // ─── Boot ─────────────────────────────────────────────────────
 (async () => {
-  // Handle redirect after login
+  // Initialise MSAL then handle redirect
+  await msalInstance.initialize();
   await msalInstance.handleRedirectPromise().catch(() => {});
   await init();
 

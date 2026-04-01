@@ -5,43 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mycardium AI — Org Chart</title>
 
-  <!--
-  ============================================================
-  SETUP INSTRUCTIONS
-  ============================================================
-
-  1. REGISTER AN AZURE AD APP
-     a. Go to https://portal.azure.com → Azure Active Directory → App registrations
-     b. Click "New registration"
-        - Name: "Mycardium Org Chart"
-        - Supported account types: "Accounts in this organizational directory only"
-        - Redirect URI: Select "Single-page application (SPA)"
-          and enter the URL where you'll host this file,
-          e.g. https://mycardium.sharepoint.com/sites/intranet/orgchart/index.html
-          OR for local testing: http://localhost:5500/index.html
-     c. Click Register
-     d. Copy the "Application (client) ID" — paste it below as CLIENT_ID
-     e. Copy the "Directory (tenant) ID" — paste it below as TENANT_ID
-
-  2. GRANT API PERMISSIONS
-     a. Go to API permissions → Add a permission → Microsoft Graph → Delegated
-     b. Add: User.Read, User.ReadBasic.All, People.Read.All
-     c. Click "Grant admin consent for Mycardium AI Ltd"
-
-  3. PASTE YOUR IDs BELOW and deploy this file to your intranet/SharePoint.
-
-  ============================================================
-  -->
-
   <script>
-    const CLIENT_ID = "84990117-c0bb-431d-ba91-7f2aecaa7514";
-    const TENANT_ID = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
-          const REDIRECT_URI = "https://benandersonmcai.github.io/mycardium-orgchart/";
-    const AUTHORITY = `https://login.microsoftonline.com/${TENANT_ID}`;
-    const SCOPES = ["User.Read", "User.ReadBasic.All", "People.Read.All"];
+    const CLIENT_ID  = "84990117-c0bb-431d-ba91-7f2aecaa7514";
+    const TENANT_ID  = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
+    const REDIRECT_URI = "https://benandersonmcai.github.io/mycardium-orgchart/";
+    const AUTHORITY  = `https://login.microsoftonline.com/${TENANT_ID}`;
+    const SCOPES     = ["User.Read","User.ReadBasic.All","People.Read.All"];
   </script>
 
-  <!-- Microsoft Authentication Library (MSAL) via unpkg -->
   <script src="https://unpkg.com/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
 
   <style>
@@ -51,312 +22,124 @@
       --blue: #185FA5;
       --blue-light: #E6F1FB;
       --text: #1a1a1a;
-      --text-muted: #6b7280;
-      --border: rgba(0,0,0,0.1);
-      --bg: #f9fafb;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f3f4f6;
       --card: #ffffff;
-      --radius: 10px;
+      --line: #d1d5db;
+      --radius: 8px;
+      --node-w: 160px;
+      --node-h: 72px;
+      --gap-x: 24px;
+      --gap-y: 60px;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    header {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    header h1 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-      flex: 1;
-    }
-
-    header .logo {
-      width: 32px;
-      height: 32px;
-      background: var(--blue);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 16px;
-    }
-
-    #search-bar {
-      padding: 8px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      font-size: 14px;
-      width: 260px;
-      outline: none;
-      background: var(--bg);
-    }
-
+    /* ── Header ── */
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 200; }
+    .logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; flex-shrink: 0; }
+    header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+    #search-bar { padding: 7px 12px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; width: 240px; outline: none; background: var(--bg); display: none; }
     #search-bar:focus { border-color: var(--blue); }
+    #user-info { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    #sign-out-btn { font-size: 12px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; color: var(--muted); }
 
-    #user-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    #sign-out-btn {
-      font-size: 12px;
-      padding: 5px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: transparent;
-      cursor: pointer;
-      color: var(--text-muted);
-    }
-
-    #sign-out-btn:hover { background: var(--bg); }
-
-    main { padding: 24px; }
-
-    /* Auth screen */
-    #auth-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 80vh;
-      gap: 20px;
-      text-align: center;
-    }
-
+    /* ── Auth screen ── */
+    #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; gap: 18px; text-align: center; padding: 2rem; }
     #auth-screen h2 { font-size: 22px; font-weight: 600; }
-    #auth-screen p { color: var(--text-muted); font-size: 14px; max-width: 360px; }
+    #auth-screen p { color: var(--muted); font-size: 14px; max-width: 340px; }
+    #sign-in-btn { padding: 11px 28px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
 
-    #sign-in-btn {
-      padding: 12px 28px;
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    #sign-in-btn:hover { background: #1450a0; }
-
-    /* Status / spinner */
-    #status {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      padding: 60px 0;
-    }
-
-    .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid var(--blue-light);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
+    /* ── Spinner ── */
+    #status { display: none; flex-direction: column; align-items: center; gap: 14px; padding: 80px 0; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--blue-light); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    #status p { font-size: 14px; color: var(--muted); }
 
-    #status p { font-size: 14px; color: var(--text-muted); }
+    /* ── Error ── */
+    #error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 14px 18px; color: #b91c1c; font-size: 13px; max-width: 480px; margin: 40px auto; }
 
-    /* Error */
-    #error-box {
-      background: #fff5f5;
-      border: 1px solid #fca5a5;
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      color: #b91c1c;
-      font-size: 14px;
-      max-width: 500px;
-      margin: 40px auto;
-    }
+    /* ── Chart UI ── */
+    #chart-ui { display: none; }
+    #toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 24px 0; flex-wrap: wrap; }
+    #people-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+    #refresh-btn { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; color: var(--muted); }
 
-    /* Toolbar */
-    #toolbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+    /* ── Org tree canvas ── */
+    #chart-scroll { overflow: auto; padding: 32px 24px 60px; }
+    #chart-canvas { display: inline-block; min-width: 100%; }
 
-    #people-count {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-left: auto;
-    }
+    /* ── Node ── */
+    .org-node { display: flex; flex-direction: column; align-items: center; }
 
-    #refresh-btn {
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
+    .node-box {
+      width: var(--node-w);
+      min-height: var(--node-h);
       background: var(--card);
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    #refresh-btn:hover { background: var(--bg); }
-
-    /* Layout: tree + detail panel */
-    #chart-layout {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-    }
-
-    #tree-container {
-      flex: 1;
-      overflow-x: auto;
-      padding-bottom: 20px;
-    }
-
-    /* Search results */
-    #search-results {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    /* Org tree nodes */
-    .tree-root { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; }
-
-    .tree-node { display: flex; flex-direction: column; align-items: center; }
-
-    .node-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
+      border: 1.5px solid var(--border);
       border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
+      padding: 10px 12px;
       cursor: pointer;
-      min-width: 190px;
-      max-width: 230px;
       transition: border-color 0.15s, box-shadow 0.15s;
-      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      position: relative;
     }
+    .node-box:hover { border-color: var(--blue); }
+    .node-box.selected { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
+    .node-box.ceo { border-color: var(--blue); background: var(--blue-light); }
 
-    .node-card:hover { border-color: var(--blue); }
-    .node-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
-
-    .node-info { overflow: hidden; flex: 1; }
-    .node-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .node-title { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .node-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0;
+    }
+    .node-text { overflow: hidden; flex: 1; }
+    .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .node-title { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
     .expand-btn {
-      color: var(--blue);
-      font-weight: 600;
-      font-size: 12px;
-      padding: 0 4px;
-      flex-shrink: 0;
-      cursor: pointer;
-      border: none;
-      background: none;
+      position: absolute; bottom: -11px; left: 50%; transform: translateX(-50%);
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--card); border: 1.5px solid var(--border);
+      font-size: 11px; font-weight: 700; color: var(--blue);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      z-index: 10; line-height: 1;
     }
+    .expand-btn:hover { background: var(--blue-light); border-color: var(--blue); }
 
-    .connector-v { width: 1px; height: 16px; background: var(--border); }
-    .children-row { display: flex; gap: 12px; align-items: flex-start; }
+    /* ── Connectors ── */
+    .connector-down { width: 1.5px; background: var(--line); }
+    .connector-row { display: flex; align-items: flex-start; position: relative; }
 
-    /* Avatar */
-    .avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 13px;
-      font-weight: 500;
-      flex-shrink: 0;
-    }
+    /* horizontal bar above children */
+    .h-bar-wrap { display: flex; justify-content: center; width: 100%; }
+    .h-bar-inner { position: relative; display: flex; align-items: flex-start; }
 
-    /* Detail panel */
+    /* ── Search results ── */
+    #search-results { display: none; padding: 16px 24px; flex-direction: column; gap: 8px; max-width: 600px; }
+    .result-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); cursor: pointer; }
+    .result-card:hover, .result-card.sel { border-color: var(--blue); }
+    .result-name { font-size: 13px; font-weight: 500; }
+    .result-title { font-size: 11px; color: var(--muted); }
+    .no-results { color: var(--muted); font-size: 13px; padding: 20px 0; }
+
+    /* ── Detail panel (slide-in) ── */
     #detail-panel {
-      width: 260px;
-      flex-shrink: 0;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      position: sticky;
-      top: 72px;
+      display: none; position: fixed; top: 57px; right: 0; bottom: 0;
+      width: 280px; background: var(--card); border-left: 1px solid var(--border);
+      padding: 20px; overflow-y: auto; z-index: 150;
     }
-
-    #detail-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
-
-    #detail-close {
-      float: right;
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 18px;
-      color: var(--text-muted);
-      line-height: 1;
-      margin-top: -2px;
-    }
-
-    .detail-avatar {
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 18px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    }
-
-    .detail-name { font-weight: 600; font-size: 15px; }
-    .detail-role { font-size: 12px; color: var(--text-muted); margin-top: 2px; margin-bottom: 14px; }
-
-    .detail-row { margin-bottom: 10px; }
-    .detail-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
-    .detail-value { font-size: 13px; word-break: break-all; }
-    .detail-value a { color: var(--blue); text-decoration: none; }
-    .detail-value a:hover { text-decoration: underline; }
-
-    /* Search result card */
-    .result-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
-      cursor: pointer;
-    }
-
-    .result-card:hover, .result-card.selected { border-color: var(--blue); }
-    .result-info .node-name { font-size: 14px; }
-    .result-info .node-title { font-size: 12px; }
-
-    .no-results { color: var(--text-muted); font-size: 14px; padding: 20px 0; }
+    #detail-close { float: right; background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; }
+    .d-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; margin: 12px 0 10px; }
+    .d-name { font-size: 16px; font-weight: 600; }
+    .d-role { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 16px; }
+    .d-field { margin-bottom: 12px; }
+    .d-label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+    .d-value { font-size: 13px; word-break: break-all; }
+    .d-value a { color: var(--blue); text-decoration: none; }
   </style>
 </head>
 <body>
@@ -364,182 +147,193 @@
 <header>
   <div class="logo">🏢</div>
   <h1>Mycardium AI — Org Chart</h1>
-  <input type="text" id="search-bar" placeholder="Search people, roles, departments…" style="display:none;" />
-  <div id="user-info" style="display:none;">
+  <input type="text" id="search-bar" placeholder="Search name, role, department…" />
+  <div id="user-info">
     <span id="user-name"></span>
     <button id="sign-out-btn">Sign out</button>
   </div>
 </header>
 
 <main>
-  <!-- Auth screen -->
   <div id="auth-screen">
-    <div style="font-size:48px;">🏢</div>
+    <div style="font-size:52px;">🏢</div>
     <h2>Mycardium AI Org Chart</h2>
-    <p>Sign in with your Mycardium Microsoft 365 account to view the organisation chart.</p>
+    <p>Sign in with your Mycardium Microsoft 365 account to view the full organisation chart.</p>
     <button id="sign-in-btn">Sign in with Microsoft</button>
   </div>
 
-  <!-- Loading -->
-  <div id="status" style="display:none;">
-    <div class="spinner"></div>
-    <p id="status-msg">Loading organisation…</p>
-  </div>
+  <div id="status"><div class="spinner"></div><p id="status-msg">Loading…</p></div>
+  <div id="error-box"></div>
 
-  <!-- Error -->
-  <div id="error-box" style="display:none;"></div>
-
-  <!-- Main chart UI -->
-  <div id="chart-ui" style="display:none;">
+  <div id="chart-ui">
     <div id="toolbar">
       <button id="refresh-btn">↺ Refresh</button>
       <span id="people-count"></span>
     </div>
-    <div id="chart-layout">
-      <div id="tree-container">
-        <div id="tree-root" class="tree-root"></div>
-        <div id="search-results" style="display:none;"></div>
-      </div>
-      <div id="detail-panel" style="display:none;">
-        <h3>Details <button id="detail-close">×</button></h3>
-        <div id="detail-content"></div>
-      </div>
+    <div id="chart-scroll">
+      <div id="chart-canvas"></div>
     </div>
+    <div id="search-results"></div>
   </div>
 </main>
 
+<!-- Detail panel -->
+<div id="detail-panel">
+  <button id="detail-close">×</button>
+  <h3 style="font-size:13px;font-weight:600;">Person details</h3>
+  <div id="detail-content"></div>
+</div>
+
 <script>
-// ─── MSAL setup ───────────────────────────────────────────────
+// ── MSAL ──────────────────────────────────────────────────────
 const msalConfig = {
-  auth: {
-    clientId: CLIENT_ID,
-    authority: AUTHORITY,
-    redirectUri: REDIRECT_URI,
-    navigateToLoginRequestUrl: true,
-  },
+  auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI, navigateToLoginRequestUrl: true },
   cache: { cacheLocation: "localStorage" }
 };
-
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 
-// ─── State ────────────────────────────────────────────────────
-let allUsers = [];
-let selectedId = null;
-let expandedIds = new Set();
-
-// ─── Helpers ──────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 const COLORS = ["#185FA5","#0F6E56","#533AB7","#993556","#BA7517","#A32D2D","#3B6D11","#854F0B"];
-function avatarColor(id) { let h=0; for(let c of id) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
-function initials(name) { if(!name) return "?"; return name.split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+function aColor(id) { let h=0; for(let c of (id||"")) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
+function initials(n) { return (n||"?").split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function $(id) { return document.getElementById(id); }
+function show(id,flex) { $(id).style.display = flex||"block"; }
+function hide(id) { $(id).style.display = "none"; }
+function setMsg(m) { $("status-msg").textContent = m; }
 
-function show(id) { document.getElementById(id).style.display = ""; }
-function hide(id) { document.getElementById(id).style.display = "none"; }
-function setStatus(msg) { document.getElementById("status-msg").textContent = msg; }
-function showError(msg) { const el = document.getElementById("error-box"); el.textContent = msg; show("error-box"); }
+// ── State ─────────────────────────────────────────────────────
+let allUsers=[], byId={}, expandedIds=new Set(), selectedId=null;
 
-// ─── Auth ─────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────
 async function getToken() {
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) throw new Error("Not signed in");
-  try {
-    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
-    return r.accessToken;
-  } catch {
-    await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
-  }
+  const acc = msalInstance.getAllAccounts();
+  if (!acc.length) throw new Error("Not signed in");
+  try { return (await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: acc[0] })).accessToken; }
+  catch { await msalInstance.acquireTokenRedirect({ scopes: SCOPES }); }
 }
-
 async function signIn() {
-  try {
-    await msalInstance.loginRedirect({ scopes: SCOPES });
-  } catch(e) {
-    showError("Sign-in failed: " + e.message);
-  }
+  try { await msalInstance.loginRedirect({ scopes: SCOPES }); }
+  catch(e) { showErr("Sign-in failed: "+e.message); }
 }
+function signOut() { msalInstance.logoutRedirect(); }
 
-function signOut() {
-  msalInstance.logoutRedirect();
-}
-
-// ─── Graph API ────────────────────────────────────────────────
-async function graphGet(path) {
+// ── Graph ─────────────────────────────────────────────────────
+async function gGet(path) {
   const token = await getToken();
-  const r = await fetch("https://graph.microsoft.com/v1.0" + path, {
-    headers: { Authorization: "Bearer " + token }
-  });
-  if (!r.ok) throw new Error(`Graph API error ${r.status} on ${path}`);
+  const r = await fetch("https://graph.microsoft.com/v1.0"+path, { headers:{ Authorization:"Bearer "+token } });
+  if (!r.ok) throw new Error("Graph error "+r.status);
   return r.json();
 }
-
-async function getAllUsers() {
-  let users = [];
-  let url = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$top=100";
-  while (url) {
-    const data = await graphGet(url.startsWith("http") ? url.replace("https://graph.microsoft.com/v1.0","") : url);
-    users = users.concat(data.value || []);
-    url = data["@odata.nextLink"] ? data["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
+async function fetchUsers() {
+  let users=[], url="/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$top=100";
+  while(url) {
+    const d = await gGet(url.startsWith("http") ? url.replace("https://graph.microsoft.com/v1.0","") : url);
+    users = users.concat(d.value||[]);
+    url = d["@odata.nextLink"] ? d["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
   }
-  return users.filter(u => u.displayName && !u.displayName.startsWith("#"));
+  return users.filter(u => u.displayName && !u.displayName.startsWith("#") &&
+    (u.mail||u.userPrincipalName||"").toLowerCase().includes("@mycardium.com"));
 }
-
-async function getManagerIds(users) {
-  const managerMap = {};
-  // Batch in groups of 10 using Promise.all
-  const chunks = [];
-  for (let i = 0; i < users.length; i += 10) chunks.push(users.slice(i, i+10));
-  for (const chunk of chunks) {
+async function fetchManagers(users) {
+  const map={};
+  const chunks=[]; for(let i=0;i<users.length;i+=10) chunks.push(users.slice(i,i+10));
+  for(const chunk of chunks) {
     await Promise.all(chunk.map(async u => {
-      try {
-        const m = await graphGet(`/users/${u.id}/manager?$select=id`);
-        if (m && m.id) managerMap[u.id] = m.id;
-      } catch { /* no manager */ }
+      try { const m=await gGet(`/users/${u.id}/manager?$select=id`); if(m?.id) map[u.id]=m.id; } catch{}
     }));
   }
-  return managerMap;
+  return map;
 }
 
-// ─── Build tree ───────────────────────────────────────────────
+// ── Tree build ────────────────────────────────────────────────
 function buildTree(users, managerMap) {
-  const byId = {};
-  users.forEach(u => { byId[u.id] = { ...u, managerId: managerMap[u.id] || null, reports: [] }; });
-  const roots = [];
+  byId={};
+  users.forEach(u => { byId[u.id]={...u, managerId:managerMap[u.id]||null, reports:[]}; });
+  const roots=[];
   users.forEach(u => {
-    const mid = managerMap[u.id];
-    if (mid && byId[mid]) byId[mid].reports.push(byId[u.id]);
+    const mid=managerMap[u.id];
+    if(mid && byId[mid]) byId[mid].reports.push(byId[u.id]);
     else roots.push(byId[u.id]);
   });
-  return { roots, byId };
+  // sort reports by name
+  function sortNode(n) { n.reports.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||"")); n.reports.forEach(sortNode); }
+  roots.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||""));
+  roots.forEach(sortNode);
+  return roots;
 }
 
-// ─── Render tree ──────────────────────────────────────────────
-function renderAvatar(name, id, size=36) {
-  const color = avatarColor(id || name);
-  return `<div class="avatar" style="width:${size}px;height:${size}px;background:${color};font-size:${Math.round(size*0.35)}px;">${initials(name)}</div>`;
-}
+// ── Render tree (top-down with SVG lines) ─────────────────────
+const NODE_W = 160, NODE_H = 72, GAP_X = 20, GAP_Y = 56;
 
-function renderNode(node, depth) {
-  const isExpanded = expandedIds.has(node.id) || depth < 2;
-  const hasReports = node.reports && node.reports.length > 0;
-  const isSelected = selectedId === node.id;
-
-  let html = `<div class="tree-node" data-id="${node.id}">`;
-  html += `<div class="node-card${isSelected ? " selected" : ""}" onclick="selectNode('${node.id}')">`;
-  html += renderAvatar(node.displayName, node.id, 36);
-  html += `<div class="node-info">
-    <div class="node-name">${esc(node.displayName)}</div>
-    <div class="node-title">${esc(node.jobTitle || node.department || "—")}</div>
-  </div>`;
-  if (hasReports) {
-    html += `<button class="expand-btn" onclick="event.stopPropagation();toggleExpand('${node.id}')">${isExpanded ? "−" : "+"+node.reports.length}</button>`;
+function treeLayout(node) {
+  const isExp = expandedIds.has(node.id);
+  if (!node.reports.length || !isExp) {
+    node._w = NODE_W; node._x = 0;
+    return;
   }
-  html += `</div>`;
+  node.reports.forEach(c => treeLayout(c));
+  const totalW = node.reports.reduce((s,c) => s+c._w, 0) + GAP_X*(node.reports.length-1);
+  node._w = Math.max(NODE_W, totalW);
+  // position children
+  let cx = 0;
+  node.reports.forEach(c => { c._x = cx + c._w/2 - node._w/2; cx += c._w + GAP_X; });
+  node._x = 0;
+}
 
-  if (hasReports && isExpanded) {
-    html += `<div class="connector-v"></div><div class="children-row">`;
-    node.reports.forEach(child => {
-      html += `<div style="display:flex;flex-direction:column;align-items:center;">
-        <div class="connector-v"></div>${renderNode(child, depth+1)}</div>`;
-    });
+function renderTree(node, depth) {
+  const isExp = expandedIds.has(node.id);
+  const hasRep = node.reports.length > 0;
+  const isSel = selectedId === node.id;
+  const color = aColor(node.id);
+  const isCeo = !node.managerId;
+
+  let html = `<div class="org-node" style="width:${node._w}px;position:relative;">`;
+
+  // centre the box within the node's allocated width
+  const boxLeft = (node._w - NODE_W) / 2;
+  html += `<div style="display:flex;justify-content:center;">`;
+  html += `<div class="node-box${isCeo?" ceo":""}${isSel?" selected":""}" style="width:${NODE_W}px;" onclick="selectNode('${node.id}')">`;
+  html += `<div class="node-avatar" style="background:${color};">${initials(node.displayName)}</div>`;
+  html += `<div class="node-text"><div class="node-name">${esc(node.displayName)}</div><div class="node-title">${esc(node.jobTitle||node.department||"—")}</div></div>`;
+  if (hasRep) html += `<button class="expand-btn" onclick="event.stopPropagation();toggleExp('${node.id}')">${isExp?"−":"+"+node.reports.length}</button>`;
+  html += `</div></div>`;
+
+  if (hasRep && isExp) {
+    const totalChildW = node.reports.reduce((s,c)=>s+c._w,0) + GAP_X*(node.reports.length-1);
+    const svgW = Math.max(node._w, totalChildW);
+    const lineY = GAP_Y;
+    const midX = node._w/2;
+
+    // vertical line down from node
+    html += `<div style="display:flex;justify-content:center;"><div style="width:2px;height:${GAP_Y/2}px;background:#d1d5db;"></div></div>`;
+
+    // SVG horizontal connector bar
+    if (node.reports.length > 1) {
+      let firstChildMid = node.reports[0]._x + node._w/2 - (node._w - node._w)/2 + node.reports[0]._w/2 - totalChildW/2 + node._w/2 - node._w/2;
+      // simpler: compute left/right extent of children centres
+      let childCentres = [];
+      let cx2 = (node._w - totalChildW)/2;
+      node.reports.forEach(c => { childCentres.push(cx2 + c._w/2); cx2 += c._w + GAP_X; });
+      const leftMost = childCentres[0];
+      const rightMost = childCentres[childCentres.length-1];
+
+      html += `<div style="position:relative;width:${node._w}px;height:${GAP_Y/2}px;">`;
+      html += `<svg width="${node._w}" height="${GAP_Y/2}" style="position:absolute;top:0;left:0;overflow:visible;">`;
+      // horizontal bar
+      html += `<line x1="${leftMost}" y1="${GAP_Y/2-1}" x2="${rightMost}" y2="${GAP_Y/2-1}" stroke="#d1d5db" stroke-width="2"/>`;
+      // vertical drops to each child
+      childCentres.forEach(cx3 => {
+        html += `<line x1="${cx3}" y1="0" x2="${cx3}" y2="${GAP_Y/2}" stroke="#d1d5db" stroke-width="2"/>`;
+      });
+      html += `</svg></div>`;
+    } else {
+      html += `<div style="display:flex;justify-content:center;"><div style="width:2px;height:${GAP_Y/2}px;background:#d1d5db;"></div></div>`;
+    }
+
+    // children row
+    html += `<div style="display:flex;align-items:flex-start;gap:${GAP_X}px;">`;
+    node.reports.forEach(c => { html += renderTree(c, depth+1); });
     html += `</div>`;
   }
 
@@ -547,153 +341,107 @@ function renderNode(node, depth) {
   return html;
 }
 
-function rerenderTree() {
-  const { roots } = window._tree;
-  const container = document.getElementById("tree-root");
-  container.innerHTML = roots.map(r => renderNode(r, 0)).join("");
+// ── Load & render ─────────────────────────────────────────────
+let roots=[];
+
+async function loadData() {
+  hide("error-box"); show("status","flex"); hide("chart-ui");
+  try {
+    setMsg("Fetching users…");
+    const users = await fetchUsers();
+    setMsg(`Getting manager relationships for ${users.length} people…`);
+    const mgrs = await fetchManagers(users);
+    allUsers = users;
+    roots = buildTree(users, mgrs);
+    // auto-expand top 2 levels
+    expandedIds = new Set();
+    function autoExp(n, d) { if(d<2 && n.reports.length){ expandedIds.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
+    roots.forEach(r=>autoExp(r,0));
+    $("people-count").textContent = users.length+" people";
+    renderChart();
+    hide("status"); show("chart-ui");
+  } catch(e) {
+    hide("status"); showErr("Failed to load: "+e.message);
+  }
 }
 
-function toggleExpand(id) {
-  if (expandedIds.has(id)) expandedIds.delete(id);
-  else expandedIds.add(id);
-  rerenderTree();
+function renderChart() {
+  roots.forEach(r=>treeLayout(r));
+  $("chart-canvas").innerHTML = roots.map(r=>renderTree(r,0)).join(`<div style="height:40px;"></div>`);
+}
+
+function toggleExp(id) {
+  if(expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+  selectedId=null; hide("detail-panel");
+  renderChart();
 }
 
 function selectNode(id) {
-  selectedId = id;
-  rerenderTree();
-  showDetail(id);
+  selectedId=id; renderChart(); showDetail(id);
 }
 
-// ─── Detail panel ─────────────────────────────────────────────
+// ── Detail panel ──────────────────────────────────────────────
 function showDetail(id) {
-  const { byId } = window._tree;
-  const u = byId[id];
-  if (!u) return;
-  const color = avatarColor(u.id);
-  const email = u.mail || u.userPrincipalName || "";
-  const phone = u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || "";
-  const reportCount = u.reports ? u.reports.length : 0;
-
-  document.getElementById("detail-content").innerHTML = `
-    <div class="detail-avatar" style="background:${color};">${initials(u.displayName)}</div>
-    <div class="detail-name">${esc(u.displayName)}</div>
-    <div class="detail-role">${esc(u.jobTitle || "")}</div>
-    ${field("Department", u.department)}
-    ${field("Office", u.officeLocation)}
-    ${email ? `<div class="detail-row"><div class="detail-label">Email</div><div class="detail-value"><a href="mailto:${email}">${esc(email)}</a></div></div>` : ""}
-    ${phone ? `<div class="detail-row"><div class="detail-label">Phone</div><div class="detail-value"><a href="tel:${phone}">${esc(phone)}</a></div></div>` : ""}
-    ${field("Direct reports", reportCount > 0 ? reportCount + " people" : "None")}
+  const u=byId[id]; if(!u) return;
+  const color=aColor(u.id);
+  const email=u.mail||u.userPrincipalName||"";
+  const phone=u.mobilePhone||(u.businessPhones&&u.businessPhones[0])||"";
+  const reps=u.reports?u.reports.length:0;
+  $("detail-content").innerHTML=`
+    <div class="d-avatar" style="background:${color};">${initials(u.displayName)}</div>
+    <div class="d-name">${esc(u.displayName)}</div>
+    <div class="d-role">${esc(u.jobTitle||"")}</div>
+    ${df("Department",u.department)}
+    ${df("Office",u.officeLocation)}
+    ${email?`<div class="d-field"><div class="d-label">Email</div><div class="d-value"><a href="mailto:${email}">${esc(email)}</a></div></div>`:""}
+    ${phone?`<div class="d-field"><div class="d-label">Phone</div><div class="d-value"><a href="tel:${phone}">${esc(phone)}</a></div></div>`:""}
+    ${df("Direct reports", reps>0?reps+" people":"None")}
   `;
   show("detail-panel");
 }
+function df(l,v){ return v?`<div class="d-field"><div class="d-label">${l}</div><div class="d-value">${esc(String(v))}</div></div>`:""; }
 
-function field(label, val) {
-  if (!val) return "";
-  return `<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-value">${esc(String(val))}</div></div>`;
-}
-
-function esc(str) {
-  if (!str) return "";
-  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-// ─── Search ───────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────
 function doSearch(q) {
-  const treeEl = document.getElementById("tree-root");
-  const resultsEl = document.getElementById("search-results");
-  if (!q.trim()) {
-    treeEl.style.display = "";
-    resultsEl.style.display = "none";
-    return;
-  }
-  treeEl.style.display = "none";
-  resultsEl.style.display = "";
-  const lq = q.toLowerCase();
-  const matches = allUsers.filter(u =>
-    (u.displayName||"").toLowerCase().includes(lq) ||
-    (u.jobTitle||"").toLowerCase().includes(lq) ||
-    (u.department||"").toLowerCase().includes(lq) ||
+  const canvas=$("chart-canvas"), results=$("search-results");
+  if(!q.trim()){ canvas.style.display=""; results.style.display="none"; return; }
+  canvas.style.display="none"; show("search-results","flex");
+  const lq=q.toLowerCase();
+  const hits=allUsers.filter(u=>
+    (u.displayName||"").toLowerCase().includes(lq)||
+    (u.jobTitle||"").toLowerCase().includes(lq)||
+    (u.department||"").toLowerCase().includes(lq)||
     (u.mail||"").toLowerCase().includes(lq)
   );
-  if (matches.length === 0) {
-    resultsEl.innerHTML = `<div class="no-results">No results for "${esc(q)}"</div>`;
-    return;
-  }
-  resultsEl.innerHTML = matches.map(u => `
-    <div class="result-card${selectedId===u.id?" selected":""}" onclick="selectNode('${u.id}')">
-      ${renderAvatar(u.displayName, u.id, 36)}
-      <div class="result-info">
-        <div class="node-name">${esc(u.displayName)}</div>
-        <div class="node-title">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div>
-      </div>
-    </div>
-  `).join("");
+  if(!hits.length){ results.innerHTML=`<div class="no-results">No results for "${esc(q)}"</div>`; return; }
+  results.innerHTML=hits.map(u=>`
+    <div class="result-card${selectedId===u.id?" sel":""}" onclick="selectNode('${u.id}')">
+      <div class="node-avatar" style="background:${aColor(u.id)};width:36px;height:36px;font-size:13px;">${initials(u.displayName)}</div>
+      <div><div class="result-name">${esc(u.displayName)}</div><div class="result-title">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div></div>
+    </div>`).join("");
 }
 
-// ─── Main init ────────────────────────────────────────────────
-async function loadData() {
-  hide("error-box");
-  show("status");
-  hide("chart-ui");
+function showErr(msg){ $("error-box").textContent=msg; show("error-box"); }
 
-  try {
-    setStatus("Fetching all users…");
-    const users = await getAllUsers();
-
-    setStatus(`Fetching manager relationships for ${users.length} people…`);
-    const managerMap = await getManagerIds(users);
-
-    allUsers = users;
-    window._tree = buildTree(users, managerMap);
-
-    document.getElementById("people-count").textContent = users.length + " people";
-
-    rerenderTree();
-    hide("status");
-    show("chart-ui");
-
-  } catch(e) {
-    hide("status");
-    showError("Failed to load org data: " + e.message);
-  }
-}
-
+// ── Init ──────────────────────────────────────────────────────
 async function init() {
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) return; // stay on auth screen
-
-  const account = accounts[0];
-  document.getElementById("user-name").textContent = account.name || account.username;
-
-  hide("auth-screen");
-  show("search-bar");
-  show("user-info");
-
+  const accs=msalInstance.getAllAccounts();
+  if(!accs.length) return;
+  $("user-name").textContent=accs[0].name||accs[0].username;
+  hide("auth-screen"); $("search-bar").style.display=""; show("user-info","flex");
   await loadData();
 }
 
-// ─── Boot ─────────────────────────────────────────────────────
-(async () => {
-  // Initialise MSAL then handle redirect
+(async()=>{
   await msalInstance.initialize();
-  await msalInstance.handleRedirectPromise().catch(() => {});
+  await msalInstance.handleRedirectPromise().catch(()=>{});
   await init();
-
-  document.getElementById("sign-in-btn").addEventListener("click", signIn);
-  document.getElementById("sign-out-btn").addEventListener("click", signOut);
-  document.getElementById("refresh-btn").addEventListener("click", loadData);
-  document.getElementById("detail-close").addEventListener("click", () => {
-    hide("detail-panel");
-    selectedId = null;
-    rerenderTree();
-  });
-
-  let searchTimer;
-  document.getElementById("search-bar").addEventListener("input", e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => doSearch(e.target.value), 200);
-  });
+  $("sign-in-btn").addEventListener("click", signIn);
+  $("sign-out-btn").addEventListener("click", signOut);
+  $("refresh-btn").addEventListener("click", loadData);
+  $("detail-close").addEventListener("click", ()=>{ hide("detail-panel"); selectedId=null; renderChart(); });
+  let t;
+  $("search-bar").addEventListener("input", e=>{ clearTimeout(t); t=setTimeout(()=>doSearch(e.target.value),200); });
 })();
 </script>
 </body>

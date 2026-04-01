@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mycardium AI — Org Chart</title>
+
+  <!--
+  ============================================================
+  SETUP INSTRUCTIONS
+  ============================================================
+
+  1. REGISTER AN AZURE AD APP
+     a. Go to https://portal.azure.com → Azure Active Directory → App registrations
+     b. Click "New registration"
+        - Name: "Mycardium Org Chart"
+        - Supported account types: "Accounts in this organizational directory only"
+        - Redirect URI: Select "Single-page application (SPA)"
+          and enter the URL where you'll host this file,
+          e.g. https://mycardium.sharepoint.com/sites/intranet/orgchart/index.html
+          OR for local testing: http://localhost:5500/index.html
+     c. Click Register
+     d. Copy the "Application (client) ID" — paste it below as CLIENT_ID
+     e. Copy the "Directory (tenant) ID" — paste it below as TENANT_ID
+
+  2. GRANT API PERMISSIONS
+     a. Go to API permissions → Add a permission → Microsoft Graph → Delegated
+     b. Add: User.Read, User.ReadBasic.All, People.Read.All
+     c. Click "Grant admin consent for Mycardium AI Ltd"
+
+  3. PASTE YOUR IDs BELOW and deploy this file to your intranet/SharePoint.
+
+  ============================================================
+  -->
+
+  <script>
+    const CLIENT_ID = "84990117-c0bb-431d-ba91-7f2aecaa7514";
+    const TENANT_ID = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
+          const REDIRECT_URI = "https://benandersonmcai.github.io/mycardium-orgchart/";
+    const AUTHORITY = `https://login.microsoftonline.com/${TENANT_ID}`;
+    const SCOPES = ["User.Read", "User.ReadBasic.All", "People.Read.All"];
+  </script>
+
+  <!-- Microsoft Authentication Library (MSAL) -->
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #185FA5;
+      --blue-light: #E6F1FB;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --border: rgba(0,0,0,0.1);
+      --bg: #f9fafb;
+      --card: #ffffff;
+      --radius: 10px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+
+    header .logo {
+      width: 32px;
+      height: 32px;
+      background: var(--blue);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 16px;
+    }
+
+    #search-bar {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      width: 260px;
+      outline: none;
+      background: var(--bg);
+    }
+
+    #search-bar:focus { border-color: var(--blue); }
+
+    #user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    #sign-out-btn {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    #sign-out-btn:hover { background: var(--bg); }
+
+    main { padding: 24px; }
+
+    /* Auth screen */
+    #auth-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      gap: 20px;
+      text-align: center;
+    }
+
+    #auth-screen h2 { font-size: 22px; font-weight: 600; }
+    #auth-screen p { color: var(--text-muted); font-size: 14px; max-width: 360px; }
+
+    #sign-in-btn {
+      padding: 12px 28px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    #sign-in-btn:hover { background: #1450a0; }
+
+    /* Status / spinner */
+    #status {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 60px 0;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--blue-light);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #status p { font-size: 14px; color: var(--text-muted); }
+
+    /* Error */
+    #error-box {
+      background: #fff5f5;
+      border: 1px solid #fca5a5;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      color: #b91c1c;
+      font-size: 14px;
+      max-width: 500px;
+      margin: 40px auto;
+    }
+
+    /* Toolbar */
+    #toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    #people-count {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    #refresh-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    #refresh-btn:hover { background: var(--bg); }
+
+    /* Layout: tree + detail panel */
+    #chart-layout {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    #tree-container {
+      flex: 1;
+      overflow-x: auto;
+      padding-bottom: 20px;
+    }
+
+    /* Search results */
+    #search-results {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Org tree nodes */
+    .tree-root { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; }
+
+    .tree-node { display: flex; flex-direction: column; align-items: center; }
+
+    .node-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      min-width: 190px;
+      max-width: 230px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      user-select: none;
+    }
+
+    .node-card:hover { border-color: var(--blue); }
+    .node-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
+
+    .node-info { overflow: hidden; flex: 1; }
+    .node-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .node-title { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+    .expand-btn {
+      color: var(--blue);
+      font-weight: 600;
+      font-size: 12px;
+      padding: 0 4px;
+      flex-shrink: 0;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+
+    .connector-v { width: 1px; height: 16px; background: var(--border); }
+    .children-row { display: flex; gap: 12px; align-items: flex-start; }
+
+    /* Avatar */
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 13px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    /* Detail panel */
+    #detail-panel {
+      width: 260px;
+      flex-shrink: 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      position: sticky;
+      top: 72px;
+    }
+
+    #detail-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+
+    #detail-close {
+      float: right;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--text-muted);
+      line-height: 1;
+      margin-top: -2px;
+    }
+
+    .detail-avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+
+    .detail-name { font-weight: 600; font-size: 15px; }
+    .detail-role { font-size: 12px; color: var(--text-muted); margin-top: 2px; margin-bottom: 14px; }
+
+    .detail-row { margin-bottom: 10px; }
+    .detail-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+    .detail-value { font-size: 13px; word-break: break-all; }
+    .detail-value a { color: var(--blue); text-decoration: none; }
+    .detail-value a:hover { text-decoration: underline; }
+
+    /* Search result card */
+    .result-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+    }
+
+    .result-card:hover, .result-card.selected { border-color: var(--blue); }
+    .result-info .node-name { font-size: 14px; }
+    .result-info .node-title { font-size: 12px; }
+
+    .no-results { color: var(--text-muted); font-size: 14px; padding: 20px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏢</div>
+  <h1>Mycardium AI — Org Chart</h1>
+  <input type="text" id="search-bar" placeholder="Search people, roles, departments…" style="display:none;" />
+  <div id="user-info" style="display:none;">
+    <span id="user-name"></span>
+    <button id="sign-out-btn">Sign out</button>
+  </div>
+</header>
+
+<main>
+  <!-- Auth screen -->
+  <div id="auth-screen">
+    <div style="font-size:48px;">🏢</div>
+    <h2>Mycardium AI Org Chart</h2>
+    <p>Sign in with your Mycardium Microsoft 365 account to view the organisation chart.</p>
+    <button id="sign-in-btn">Sign in with Microsoft</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="status" style="display:none;">
+    <div class="spinner"></div>
+    <p id="status-msg">Loading organisation…</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error-box" style="display:none;"></div>
+
+  <!-- Main chart UI -->
+  <div id="chart-ui" style="display:none;">
+    <div id="toolbar">
+      <button id="refresh-btn">↺ Refresh</button>
+      <span id="people-count"></span>
+    </div>
+    <div id="chart-layout">
+      <div id="tree-container">
+        <div id="tree-root" class="tree-root"></div>
+        <div id="search-results" style="display:none;"></div>
+      </div>
+      <div id="detail-panel" style="display:none;">
+        <h3>Details <button id="detail-close">×</button></h3>
+        <div id="detail-content"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── MSAL setup ───────────────────────────────────────────────
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: AUTHORITY,
+    redirectUri: REDIRECT_URI,
+    navigateToLoginRequestUrl: true,
+  },
+  cache: { cacheLocation: "localStorage" }
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+// ─── State ────────────────────────────────────────────────────
+let allUsers = [];
+let selectedId = null;
+let expandedIds = new Set();
+
+// ─── Helpers ──────────────────────────────────────────────────
+const COLORS = ["#185FA5","#0F6E56","#533AB7","#993556","#BA7517","#A32D2D","#3B6D11","#854F0B"];
+function avatarColor(id) { let h=0; for(let c of id) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
+function initials(name) { if(!name) return "?"; return name.split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+
+function show(id) { document.getElementById(id).style.display = ""; }
+function hide(id) { document.getElementById(id).style.display = "none"; }
+function setStatus(msg) { document.getElementById("status-msg").textContent = msg; }
+function showError(msg) { const el = document.getElementById("error-box"); el.textContent = msg; show("error-box"); }
+
+// ─── Auth ─────────────────────────────────────────────────────
+async function getToken() {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) throw new Error("Not signed in");
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+    return r.accessToken;
+  } catch {
+    await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
+  }
+}
+
+async function signIn() {
+  try {
+    await msalInstance.loginRedirect({ scopes: SCOPES });
+  } catch(e) {
+    showError("Sign-in failed: " + e.message);
+  }
+}
+
+function signOut() {
+  msalInstance.logoutRedirect();
+}
+
+// ─── Graph API ────────────────────────────────────────────────
+async function graphGet(path) {
+  const token = await getToken();
+  const r = await fetch("https://graph.microsoft.com/v1.0" + path, {
+    headers: { Authorization: "Bearer " + token }
+  });
+  if (!r.ok) throw new Error(`Graph API error ${r.status} on ${path}`);
+  return r.json();
+}
+
+async function getAllUsers() {
+  let users = [];
+  let url = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$top=100";
+  while (url) {
+    const data = await graphGet(url.startsWith("http") ? url.replace("https://graph.microsoft.com/v1.0","") : url);
+    users = users.concat(data.value || []);
+    url = data["@odata.nextLink"] ? data["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
+  }
+  return users.filter(u => u.displayName && !u.displayName.startsWith("#"));
+}
+
+async function getManagerIds(users) {
+  const managerMap = {};
+  // Batch in groups of 10 using Promise.all
+  const chunks = [];
+  for (let i = 0; i < users.length; i += 10) chunks.push(users.slice(i, i+10));
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async u => {
+      try {
+        const m = await graphGet(`/users/${u.id}/manager?$select=id`);
+        if (m && m.id) managerMap[u.id] = m.id;
+      } catch { /* no manager */ }
+    }));
+  }
+  return managerMap;
+}
+
+// ─── Build tree ───────────────────────────────────────────────
+function buildTree(users, managerMap) {
+  const byId = {};
+  users.forEach(u => { byId[u.id] = { ...u, managerId: managerMap[u.id] || null, reports: [] }; });
+  const roots = [];
+  users.forEach(u => {
+    const mid = managerMap[u.id];
+    if (mid && byId[mid]) byId[mid].reports.push(byId[u.id]);
+    else roots.push(byId[u.id]);
+  });
+  return { roots, byId };
+}
+
+// ─── Render tree ──────────────────────────────────────────────
+function renderAvatar(name, id, size=36) {
+  const color = avatarColor(id || name);
+  return `<div class="avatar" style="width:${size}px;height:${size}px;background:${color};font-size:${Math.round(size*0.35)}px;">${initials(name)}</div>`;
+}
+
+function renderNode(node, depth) {
+  const isExpanded = expandedIds.has(node.id) || depth < 2;
+  const hasReports = node.reports && node.reports.length > 0;
+  const isSelected = selectedId === node.id;
+
+  let html = `<div class="tree-node" data-id="${node.id}">`;
+  html += `<div class="node-card${isSelected ? " selected" : ""}" onclick="selectNode('${node.id}')">`;
+  html += renderAvatar(node.displayName, node.id, 36);
+  html += `<div class="node-info">
+    <div class="node-name">${esc(node.displayName)}</div>
+    <div class="node-title">${esc(node.jobTitle || node.department || "—")}</div>
+  </div>`;
+  if (hasReports) {
+    html += `<button class="expand-btn" onclick="event.stopPropagation();toggleExpand('${node.id}')">${isExpanded ? "−" : "+"+node.reports.length}</button>`;
+  }
+  html += `</div>`;
+
+  if (hasReports && isExpanded) {
+    html += `<div class="connector-v"></div><div class="children-row">`;
+    node.reports.forEach(child => {
+      html += `<div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="connector-v"></div>${renderNode(child, depth+1)}</div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function rerenderTree() {
+  const { roots } = window._tree;
+  const container = document.getElementById("tree-root");
+  container.innerHTML = roots.map(r => renderNode(r, 0)).join("");
+}
+
+function toggleExpand(id) {
+  if (expandedIds.has(id)) expandedIds.delete(id);
+  else expandedIds.add(id);
+  rerenderTree();
+}
+
+function selectNode(id) {
+  selectedId = id;
+  rerenderTree();
+  showDetail(id);
+}
+
+// ─── Detail panel ─────────────────────────────────────────────
+function showDetail(id) {
+  const { byId } = window._tree;
+  const u = byId[id];
+  if (!u) return;
+  const color = avatarColor(u.id);
+  const email = u.mail || u.userPrincipalName || "";
+  const phone = u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || "";
+  const reportCount = u.reports ? u.reports.length : 0;
+
+  document.getElementById("detail-content").innerHTML = `
+    <div class="detail-avatar" style="background:${color};">${initials(u.displayName)}</div>
+    <div class="detail-name">${esc(u.displayName)}</div>
+    <div class="detail-role">${esc(u.jobTitle || "")}</div>
+    ${field("Department", u.department)}
+    ${field("Office", u.officeLocation)}
+    ${email ? `<div class="detail-row"><div class="detail-label">Email</div><div class="detail-value"><a href="mailto:${email}">${esc(email)}</a></div></div>` : ""}
+    ${phone ? `<div class="detail-row"><div class="detail-label">Phone</div><div class="detail-value"><a href="tel:${phone}">${esc(phone)}</a></div></div>` : ""}
+    ${field("Direct reports", reportCount > 0 ? reportCount + " people" : "None")}
+  `;
+  show("detail-panel");
+}
+
+function field(label, val) {
+  if (!val) return "";
+  return `<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-value">${esc(String(val))}</div></div>`;
+}
+
+function esc(str) {
+  if (!str) return "";
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ─── Search ───────────────────────────────────────────────────
+function doSearch(q) {
+  const treeEl = document.getElementById("tree-root");
+  const resultsEl = document.getElementById("search-results");
+  if (!q.trim()) {
+    treeEl.style.display = "";
+    resultsEl.style.display = "none";
+    return;
+  }
+  treeEl.style.display = "none";
+  resultsEl.style.display = "";
+  const lq = q.toLowerCase();
+  const matches = allUsers.filter(u =>
+    (u.displayName||"").toLowerCase().includes(lq) ||
+    (u.jobTitle||"").toLowerCase().includes(lq) ||
+    (u.department||"").toLowerCase().includes(lq) ||
+    (u.mail||"").toLowerCase().includes(lq)
+  );
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="no-results">No results for "${esc(q)}"</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(u => `
+    <div class="result-card${selectedId===u.id?" selected":""}" onclick="selectNode('${u.id}')">
+      ${renderAvatar(u.displayName, u.id, 36)}
+      <div class="result-info">
+        <div class="node-name">${esc(u.displayName)}</div>
+        <div class="node-title">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+// ─── Main init ────────────────────────────────────────────────
+async function loadData() {
+  hide("error-box");
+  show("status");
+  hide("chart-ui");
+
+  try {
+    setStatus("Fetching all users…");
+    const users = await getAllUsers();
+
+    setStatus(`Fetching manager relationships for ${users.length} people…`);
+    const managerMap = await getManagerIds(users);
+
+    allUsers = users;
+    window._tree = buildTree(users, managerMap);
+
+    document.getElementById("people-count").textContent = users.length + " people";
+
+    rerenderTree();
+    hide("status");
+    show("chart-ui");
+
+  } catch(e) {
+    hide("status");
+    showError("Failed to load org data: " + e.message);
+  }
+}
+
+async function init() {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 0) return; // stay on auth screen
+
+  const account = accounts[0];
+  document.getElementById("user-name").textContent = account.name || account.username;
+
+  hide("auth-screen");
+  show("search-bar");
+  show("user-info");
+
+  await loadData();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────
+(async () => {
+  // Handle redirect after login
+  await msalInstance.handleRedirectPromise().catch(() => {});
+  await init();
+
+  document.getElementById("sign-in-btn").addEventListener("click", signIn);
+  document.getElementById("sign-out-btn").addEventListener("click", signOut);
+  document.getElementById("refresh-btn").addEventListener("click", loadData);
+  document.getElementById("detail-close").addEventListener("click", () => {
+    hide("detail-panel");
+    selectedId = null;
+    rerenderTree();
+  });
+
+  let searchTimer;
+  document.getElementById("search-bar").addEventListener("input", e => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => doSearch(e.target.value), 200);
+  });
+})();
+</script>
+</body>
+</html>

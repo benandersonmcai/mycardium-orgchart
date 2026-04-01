@@ -85,8 +85,9 @@
       width: 180px; height: 120px;
       background: var(--card); border: 1px solid var(--border);
       border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      cursor: pointer; position: relative; overflow: hidden;
+      cursor: grab; position: relative; overflow: hidden;
     }
+    #minimap-canvas:active { cursor: grabbing; }
     #minimap-canvas canvas { display: block; }
     #minimap-viewport {
       position: absolute; border: 2px solid var(--blue);
@@ -97,7 +98,7 @@
     /* Node cards positioned absolutely */
     .node-card {
       position: absolute;
-      width: 160px;
+      width: 200px;
       background: var(--card);
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
@@ -108,6 +109,7 @@
       gap: 9px;
       transition: border-color 0.15s, box-shadow 0.15s;
       user-select: none;
+      min-height: 80px;
     }
     .node-card:hover { border-color: var(--blue); }
     .node-card.selected { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
@@ -115,8 +117,8 @@
 
     .node-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
     .node-text { overflow: hidden; flex: 1; min-width: 0; }
-    .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .node-title { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .node-name { font-size: 12px; font-weight: 600; white-space: normal; overflow: visible; word-break: break-word; line-height: 1.3; }
+    .node-title { font-size: 10px; color: var(--muted); white-space: normal; overflow: visible; word-break: break-word; margin-top: 3px; line-height: 1.3; }
 
     /* Toggle button sits below card, inline */
     .toggle-btn {
@@ -205,7 +207,7 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────
-const NODE_W = 160, NODE_H = 72, H_GAP = 24, V_GAP = 80, TOGGLE_R = 11;
+const NODE_W = 200, NODE_H = 80, H_GAP = 24, V_GAP = 90, TOGGLE_R = 11;
 
 // ── MSAL ──────────────────────────────────────────────────────
 const msalInstance = new msal.PublicClientApplication({
@@ -512,24 +514,40 @@ function updateMinimap(){
   vp.style.height = vpH + "px";
 }
 
-// Click minimap to scroll
-$("minimap-canvas").addEventListener("click", e => {
-  const canvas = $("chart-canvas");
-  const scroll = $("chart-scroll");
-  const cw = canvas.offsetWidth || 1;
-  const ch = canvas.offsetHeight || 1;
-  const scale = Math.min(MM_W/cw, MM_H/ch);
-  const drawW = cw * scale;
-  const drawH = ch * scale;
-  const offX = (MM_W - drawW) / 2;
-  const offY = (MM_H - drawH) / 2;
-  const rect = $("minimap-canvas").getBoundingClientRect();
-  const mx = e.clientX - rect.left - offX;
-  const my = e.clientY - rect.top  - offY;
-  scroll.scrollLeft = (mx / scale) * (zoomLevel/100) - scroll.clientWidth/2;
-  scroll.scrollTop  = (my / scale) * (zoomLevel/100) - scroll.clientHeight/2;
-  updateMinimap();
-});
+// Minimap drag-to-scroll
+(function(){
+  const mm = $("minimap-canvas");
+  let dragging = false;
+
+  function mmScroll(e){
+    const canvas = $("chart-canvas");
+    const scroll = $("chart-scroll");
+    const cw = canvas.offsetWidth || 1;
+    const ch = canvas.offsetHeight || 1;
+    const scale = Math.min(MM_W/cw, MM_H/ch);
+    const drawW = cw * scale;
+    const drawH = ch * scale;
+    const offX = (MM_W - drawW) / 2;
+    const offY = (MM_H - drawH) / 2;
+    const rect = mm.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const mx = clientX - rect.left - offX;
+    const my = clientY - rect.top  - offY;
+    scroll.scrollLeft = (mx / scale) * (zoomLevel/100) - scroll.clientWidth/2;
+    scroll.scrollTop  = (my / scale) * (zoomLevel/100) - scroll.clientHeight/2;
+    updateMinimap();
+  }
+
+  mm.addEventListener("mousedown",  e => { dragging=true; mmScroll(e); e.preventDefault(); });
+  mm.addEventListener("touchstart", e => { dragging=true; mmScroll(e); e.preventDefault(); }, {passive:false});
+
+  window.addEventListener("mousemove",  e => { if(dragging) mmScroll(e); });
+  window.addEventListener("touchmove",  e => { if(dragging) mmScroll(e); }, {passive:false});
+
+  window.addEventListener("mouseup",   () => dragging=false);
+  window.addEventListener("touchend",  () => dragging=false);
+})();
 
 // Update minimap on scroll
 $("chart-scroll").addEventListener("scroll", updateMinimap);

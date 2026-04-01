@@ -74,6 +74,26 @@
     #zoom-label { font-size: 12px; color: var(--muted); min-width: 38px; text-align: center; }
     #zoom-slider { width: 80px; accent-color: var(--blue); cursor: pointer; }
 
+    /* Minimap */
+    #minimap-wrap {
+      position: fixed; bottom: 24px; left: 24px;
+      display: none; flex-direction: column; align-items: flex-start; gap: 4px;
+      z-index: 300;
+    }
+    #minimap-label { font-size: 10px; color: var(--muted); padding-left: 2px; }
+    #minimap-canvas {
+      width: 180px; height: 120px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      cursor: pointer; position: relative; overflow: hidden;
+    }
+    #minimap-canvas canvas { display: block; }
+    #minimap-viewport {
+      position: absolute; border: 2px solid var(--blue);
+      background: rgba(24,95,165,0.1); border-radius: 2px;
+      pointer-events: none;
+    }
+
     /* Node cards positioned absolutely */
     .node-card {
       position: absolute;
@@ -159,6 +179,15 @@
     <div id="search-results"></div>
   </div>
 </main>
+
+<!-- Minimap -->
+<div id="minimap-wrap">
+  <div id="minimap-label">Overview</div>
+  <div id="minimap-canvas">
+    <canvas id="minimap-draw"></canvas>
+    <div id="minimap-viewport"></div>
+  </div>
+</div>
 
 <!-- Zoom controls -->
 <div id="zoom-controls">
@@ -359,6 +388,7 @@ function line(svg,x1,y1,x2,y2){
 function toggleNode(id){
   if(expanded.has(id)) expanded.delete(id); else expanded.add(id);
   renderChart();
+  setTimeout(updateMinimap, 50);
 }
 
 function selectNode(id){
@@ -382,7 +412,8 @@ async function loadData(){
     hide("status"); show("chart-ui");
     renderChart();
     show("zoom-controls","flex");
-    setTimeout(fitToScreen, 50);
+    show("minimap-wrap","flex");
+    setTimeout(()=>{ fitToScreen(); updateMinimap(); }, 50);
   }catch(e){ hide("status"); showErr("Failed: "+e.message); }
 }
 
@@ -413,13 +444,102 @@ function doSearch(q){
   results.innerHTML=hits.length?hits.map(u=>`<div class="result-card" onclick="selectNode('${u.id}')"><div class="node-avatar" style="background:${aColor(u.id)};width:36px;height:36px;font-size:13px;">${initials(u.displayName)}</div><div><div style="font-size:13px;font-weight:500;">${esc(u.displayName)}</div><div style="font-size:11px;color:var(--muted);">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div></div></div>`).join(""):`<div class="no-results">No results for "${esc(q)}"</div>`;
 }
 
-// ── Zoom ──────────────────────────────────────────────────────
+// ── Minimap ───────────────────────────────────────────────────
+const MM_W = 180, MM_H = 120;
+
+function updateMinimap(){
+  const canvas = $("chart-canvas");
+  const scroll = $("chart-scroll");
+  const mc = $("minimap-draw");
+  const vp = $("minimap-viewport");
+  const cw = canvas.offsetWidth || 1;
+  const ch = canvas.offsetHeight || 1;
+  const scale = Math.min(MM_W/cw, MM_H/ch);
+  const drawW = cw * scale;
+  const drawH = ch * scale;
+
+  mc.width  = MM_W;
+  mc.height = MM_H;
+  const ctx = mc.getContext("2d");
+  ctx.clearRect(0,0,MM_W,MM_H);
+
+  // background
+  ctx.fillStyle = "#f3f4f6";
+  ctx.fillRect(0,0,MM_W,MM_H);
+
+  // offset to centre the chart in minimap
+  const offX = (MM_W - drawW) / 2;
+  const offY = (MM_H - drawH) / 2;
+
+  // draw node rectangles
+  const cards = canvas.querySelectorAll(".node-card");
+  cards.forEach(card => {
+    const x = parseFloat(card.style.left)||0;
+    const y = parseFloat(card.style.top)||0;
+    const isRoot = card.classList.contains("root-node");
+    const isSel  = card.classList.contains("selected");
+    ctx.fillStyle = isSel ? "#185FA5" : isRoot ? "#bfd6f0" : "#ffffff";
+    ctx.strokeStyle = isSel ? "#185FA5" : isRoot ? "#185FA5" : "#d1d5db";
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.roundRect(offX + x*scale, offY + y*scale, NODE_W*scale, NODE_H*scale, 2);
+    ctx.fill(); ctx.stroke();
+  });
+
+  // draw connector lines
+  const svgLines = canvas.querySelectorAll("svg.lines line");
+  ctx.strokeStyle = "#c5ccd6"; ctx.lineWidth = 0.5;
+  svgLines.forEach(l => {
+    ctx.beginPath();
+    ctx.moveTo(offX + parseFloat(l.getAttribute("x1"))*scale, offY + parseFloat(l.getAttribute("y1"))*scale);
+    ctx.lineTo(offX + parseFloat(l.getAttribute("x2"))*scale, offY + parseFloat(l.getAttribute("y2"))*scale);
+    ctx.stroke();
+  });
+
+  // viewport indicator
+  const scrollLeft = scroll.scrollLeft;
+  const scrollTop  = scroll.scrollTop;
+  const visW = scroll.clientWidth  / (zoomLevel/100);
+  const visH = scroll.clientHeight / (zoomLevel/100);
+  const vpX = offX + scrollLeft * scale;
+  const vpY = offY + scrollTop  * scale;
+  const vpW = Math.min(visW * scale, drawW);
+  const vpH = Math.min(visH * scale, drawH);
+
+  vp.style.left   = vpX + "px";
+  vp.style.top    = vpY + "px";
+  vp.style.width  = vpW + "px";
+  vp.style.height = vpH + "px";
+}
+
+// Click minimap to scroll
+$("minimap-canvas").addEventListener("click", e => {
+  const canvas = $("chart-canvas");
+  const scroll = $("chart-scroll");
+  const cw = canvas.offsetWidth || 1;
+  const ch = canvas.offsetHeight || 1;
+  const scale = Math.min(MM_W/cw, MM_H/ch);
+  const drawW = cw * scale;
+  const drawH = ch * scale;
+  const offX = (MM_W - drawW) / 2;
+  const offY = (MM_H - drawH) / 2;
+  const rect = $("minimap-canvas").getBoundingClientRect();
+  const mx = e.clientX - rect.left - offX;
+  const my = e.clientY - rect.top  - offY;
+  scroll.scrollLeft = (mx / scale) * (zoomLevel/100) - scroll.clientWidth/2;
+  scroll.scrollTop  = (my / scale) * (zoomLevel/100) - scroll.clientHeight/2;
+  updateMinimap();
+});
+
+// Update minimap on scroll
+$("chart-scroll").addEventListener("scroll", updateMinimap);
 let zoomLevel = 100;
 function setZoom(z, skipSlider){
   zoomLevel = Math.min(150, Math.max(20, z));
   $("chart-wrap").style.transform = `scale(${zoomLevel/100})`;
   $("zoom-label").textContent = zoomLevel+"%";
   if(!skipSlider) $("zoom-slider").value = zoomLevel;
+  setTimeout(updateMinimap, 50);
 }
 function fitToScreen(){
   const scroll = $("chart-scroll");

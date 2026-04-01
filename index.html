@@ -397,6 +397,7 @@ function renderChart(){
 
     const card=document.createElement("div");
     card.className="node-card"+(selectedId===node.id?" selected":"")+((!node.managerId)?" root-node":"");
+    card.dataset.id=node.id;
     card.style.left=p.x+"px";
     card.style.top=p.y+"px";
 
@@ -417,13 +418,6 @@ function renderChart(){
     txt.appendChild(nm);
     txt.appendChild(tl);
     card.appendChild(txt);
-
-    card.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      selectedId=node.id;
-      renderChart();
-      showSpotlight(node.id);
-    });
     canvas.appendChild(card);
 
     if(node.reports.length){

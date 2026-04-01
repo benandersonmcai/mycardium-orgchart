@@ -52,8 +52,27 @@
 
     #chart-scroll { overflow: auto; padding: 32px 40px 60px; cursor: grab; }
     #chart-scroll:active { cursor: grabbing; }
+    #chart-wrap { transform-origin: top left; transition: transform 0.15s ease; }
     #chart-canvas { position: relative; display: inline-block; }
     #chart-canvas svg.lines { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+
+    /* Zoom controls */
+    #zoom-controls {
+      position: fixed; bottom: 24px; right: 24px;
+      display: none; align-items: center; gap: 6px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 6px 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 300;
+    }
+    #zoom-controls button {
+      width: 30px; height: 30px; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent;
+      font-size: 16px; cursor: pointer; color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #zoom-controls button:hover { background: var(--bg); }
+    #zoom-label { font-size: 12px; color: var(--muted); min-width: 38px; text-align: center; }
+    #zoom-slider { width: 80px; accent-color: var(--blue); cursor: pointer; }
 
     /* Node cards positioned absolutely */
     .node-card {
@@ -136,10 +155,19 @@
       <button id="collapse-btn">⊟ Collapse all</button>
       <span id="people-count"></span>
     </div>
-    <div id="chart-scroll"><div id="chart-canvas"></div></div>
+    <div id="chart-scroll"><div id="chart-wrap"><div id="chart-canvas"></div></div></div>
     <div id="search-results"></div>
   </div>
 </main>
+
+<!-- Zoom controls -->
+<div id="zoom-controls">
+  <button id="zoom-out-btn" title="Zoom out">−</button>
+  <input type="range" id="zoom-slider" min="20" max="150" value="100" step="5" />
+  <button id="zoom-in-btn" title="Zoom in">+</button>
+  <span id="zoom-label">100%</span>
+  <button id="fit-btn" title="Fit to screen" style="width:auto;padding:0 8px;font-size:12px;">Fit</button>
+</div>
 <div id="detail-panel">
   <button id="detail-close">×</button>
   <h3 style="font-size:13px;font-weight:600;">Person details</h3>
@@ -353,6 +381,8 @@ async function loadData(){
     $("people-count").textContent=users.length+" people";
     hide("status"); show("chart-ui");
     renderChart();
+    show("zoom-controls","flex");
+    setTimeout(fitToScreen, 50);
   }catch(e){ hide("status"); showErr("Failed: "+e.message); }
 }
 
@@ -383,7 +413,34 @@ function doSearch(q){
   results.innerHTML=hits.length?hits.map(u=>`<div class="result-card" onclick="selectNode('${u.id}')"><div class="node-avatar" style="background:${aColor(u.id)};width:36px;height:36px;font-size:13px;">${initials(u.displayName)}</div><div><div style="font-size:13px;font-weight:500;">${esc(u.displayName)}</div><div style="font-size:11px;color:var(--muted);">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div></div></div>`).join(""):`<div class="no-results">No results for "${esc(q)}"</div>`;
 }
 
-function showErr(m){ $("error-box").textContent=m; show("error-box"); }
+// ── Zoom ──────────────────────────────────────────────────────
+let zoomLevel = 100;
+function setZoom(z, skipSlider){
+  zoomLevel = Math.min(150, Math.max(20, z));
+  $("chart-wrap").style.transform = `scale(${zoomLevel/100})`;
+  $("zoom-label").textContent = zoomLevel+"%";
+  if(!skipSlider) $("zoom-slider").value = zoomLevel;
+}
+function fitToScreen(){
+  const scroll = $("chart-scroll");
+  const canvas = $("chart-canvas");
+  const scW = scroll.clientWidth - 80;
+  const scH = scroll.clientHeight - 80;
+  const cnW = canvas.offsetWidth;
+  const cnH = canvas.offsetHeight;
+  if(!cnW || !cnH) return;
+  const z = Math.floor(Math.min(scW/cnW, scH/cnH) * 100);
+  setZoom(Math.min(150, Math.max(20, z)));
+  scroll.scrollTo(0,0);
+}
+
+// mouse wheel zoom
+$("chart-scroll").addEventListener("wheel", e=>{
+  if(e.ctrlKey || e.metaKey){
+    e.preventDefault();
+    setZoom(zoomLevel + (e.deltaY < 0 ? 10 : -10));
+  }
+}, {passive: false});
 
 // ── Init ──────────────────────────────────────────────────────
 async function init(){
@@ -410,6 +467,10 @@ async function init(){
     selectedId=null; hide("detail-panel"); renderChart();
   });
   $("detail-close").addEventListener("click",()=>{ hide("detail-panel"); selectedId=null; renderChart(); });
+  $("zoom-in-btn").addEventListener("click",()=>setZoom(zoomLevel+10));
+  $("zoom-out-btn").addEventListener("click",()=>setZoom(zoomLevel-10));
+  $("zoom-slider").addEventListener("input",e=>setZoom(Number(e.target.value),true));
+  $("fit-btn").addEventListener("click",fitToScreen);
   let t; $("search-bar").addEventListener("input",e=>{ clearTimeout(t); t=setTimeout(()=>doSearch(e.target.value),200); });
 })();
 </script>

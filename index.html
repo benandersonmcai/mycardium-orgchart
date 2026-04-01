@@ -10,135 +10,103 @@
     const TENANT_ID  = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
     const REDIRECT_URI = "https://benandersonmcai.github.io/mycardium-orgchart/";
     const AUTHORITY  = `https://login.microsoftonline.com/${TENANT_ID}`;
-    const SCOPES = ["User.Read", "User.ReadBasic.All", "People.Read.All", "Directory.Read.All"];
+    const SCOPES     = ["User.Read","User.ReadBasic.All","People.Read.All","Directory.Read.All"];
   </script>
-
   <script src="https://unpkg.com/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --blue: #185FA5;
-      --blue-light: #E6F1FB;
-      --text: #1a1a1a;
-      --muted: #6b7280;
-      --border: #e5e7eb;
-      --bg: #f3f4f6;
-      --card: #ffffff;
-      --line: #d1d5db;
-      --radius: 8px;
-      --node-w: 160px;
-      --node-h: 72px;
-      --gap-x: 24px;
-      --gap-y: 60px;
+      --blue: #185FA5; --blue-light: #E6F1FB;
+      --text: #1a1a1a; --muted: #6b7280;
+      --border: #e5e7eb; --bg: #f3f4f6; --card: #ffffff;
+      --line: #c5ccd6; --radius: 8px;
     }
-
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    /* ── Header ── */
-    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 200; }
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 200; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; flex-shrink: 0; }
     header h1 { font-size: 15px; font-weight: 600; flex: 1; }
-    #search-bar { padding: 7px 12px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; width: 240px; outline: none; background: var(--bg); display: none; }
+    #search-bar { padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; width: 240px; outline: none; background: var(--bg); display: none; }
     #search-bar:focus { border-color: var(--blue); }
     #user-info { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
     #sign-out-btn { font-size: 12px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; color: var(--muted); }
 
-    /* ── Auth screen ── */
     #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; gap: 18px; text-align: center; padding: 2rem; }
     #auth-screen h2 { font-size: 22px; font-weight: 600; }
     #auth-screen p { color: var(--muted); font-size: 14px; max-width: 340px; }
     #sign-in-btn { padding: 11px 28px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
 
-    /* ── Spinner ── */
     #status { display: none; flex-direction: column; align-items: center; gap: 14px; padding: 80px 0; }
     .spinner { width: 36px; height: 36px; border: 3px solid var(--blue-light); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     #status p { font-size: 14px; color: var(--muted); }
 
-    /* ── Error ── */
     #error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 14px 18px; color: #b91c1c; font-size: 13px; max-width: 480px; margin: 40px auto; }
 
-    /* ── Chart UI ── */
     #chart-ui { display: none; }
-    #toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 24px 0; flex-wrap: wrap; }
+    #toolbar { display: flex; align-items: center; gap: 8px; padding: 14px 24px; flex-wrap: wrap; }
+    #toolbar button { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; color: var(--muted); }
+    #toolbar button:hover { background: var(--bg); color: var(--text); }
     #people-count { font-size: 12px; color: var(--muted); margin-left: auto; }
-    #refresh-btn, #expand-all-btn, #collapse-all-btn { font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; color: var(--muted); }
-    #expand-all-btn:hover, #collapse-all-btn:hover, #refresh-btn:hover { background: var(--bg); }
 
-    /* ── Org tree canvas ── */
-    #chart-scroll { overflow: auto; padding: 32px 24px 60px; }
-    #chart-canvas { display: inline-block; min-width: 100%; }
+    #chart-scroll { overflow: auto; padding: 32px 40px 60px; cursor: grab; }
+    #chart-scroll:active { cursor: grabbing; }
+    #chart-canvas { position: relative; display: inline-block; }
+    #chart-canvas svg.lines { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 
-    /* ── Node ── */
-    .org-node { display: flex; flex-direction: column; align-items: center; }
-
-    .node-box {
-      width: var(--node-w);
-      min-height: var(--node-h);
+    /* Node cards positioned absolutely */
+    .node-card {
+      position: absolute;
+      width: 160px;
       background: var(--card);
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
       padding: 10px 12px;
       cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
       display: flex;
       align-items: center;
       gap: 9px;
-      position: relative;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      user-select: none;
     }
-    .node-box:hover { border-color: var(--blue); }
-    .node-box.selected { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
-    .node-box.ceo { border-color: var(--blue); background: var(--blue-light); }
+    .node-card:hover { border-color: var(--blue); }
+    .node-card.selected { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
+    .node-card.root-node { border-color: var(--blue); background: var(--blue-light); }
 
-    .node-avatar {
-      width: 34px; height: 34px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0;
-    }
-    .node-text { overflow: hidden; flex: 1; }
+    .node-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .node-text { overflow: hidden; flex: 1; min-width: 0; }
     .node-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .node-title { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
-    .expand-btn {
-      position: absolute; bottom: -11px; left: 50%; transform: translateX(-50%);
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--card); border: 1.5px solid var(--border);
-      font-size: 11px; font-weight: 700; color: var(--blue);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      z-index: 10; line-height: 1;
+    /* Toggle button sits below card, inline */
+    .toggle-btn {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 1.5px solid var(--line);
+      font-size: 12px; font-weight: 700;
+      color: var(--blue);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10;
+      transition: background 0.15s;
     }
-    .expand-btn:hover { background: var(--blue-light); border-color: var(--blue); }
-    /* remove top connector line artefact */
-    .node-box::before { display: none; }
+    .toggle-btn:hover { background: var(--blue-light); border-color: var(--blue); }
 
-    /* ── Connectors ── */
-    .connector-down { width: 1.5px; background: var(--line); }
-    .connector-row { display: flex; align-items: flex-start; position: relative; }
-
-    /* horizontal bar above children */
-    .h-bar-wrap { display: flex; justify-content: center; width: 100%; }
-    .h-bar-inner { position: relative; display: flex; align-items: flex-start; }
-
-    /* ── Search results ── */
+    /* Search */
     #search-results { display: none; padding: 16px 24px; flex-direction: column; gap: 8px; max-width: 600px; }
     .result-card { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); cursor: pointer; }
-    .result-card:hover, .result-card.sel { border-color: var(--blue); }
-    .result-name { font-size: 13px; font-weight: 500; }
-    .result-title { font-size: 11px; color: var(--muted); }
+    .result-card:hover { border-color: var(--blue); }
     .no-results { color: var(--muted); font-size: 13px; padding: 20px 0; }
 
-    /* ── Detail panel (slide-in) ── */
-    #detail-panel {
-      display: none; position: fixed; top: 57px; right: 0; bottom: 0;
-      width: 280px; background: var(--card); border-left: 1px solid var(--border);
-      padding: 20px; overflow-y: auto; z-index: 150;
-    }
-    #detail-close { float: right; background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; }
+    /* Detail panel */
+    #detail-panel { display: none; position: fixed; top: 57px; right: 0; bottom: 0; width: 280px; background: var(--card); border-left: 1px solid var(--border); padding: 20px; overflow-y: auto; z-index: 150; }
+    #detail-close { float: right; background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); }
     .d-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px; font-weight: 600; margin: 12px 0 10px; }
     .d-name { font-size: 16px; font-weight: 600; }
-    .d-role { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 16px; }
+    .d-role { font-size: 12px; color: var(--muted); margin: 2px 0 16px; }
     .d-field { margin-bottom: 12px; }
     .d-label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
     .d-value { font-size: 13px; word-break: break-all; }
@@ -146,17 +114,12 @@
   </style>
 </head>
 <body>
-
 <header>
   <div class="logo">🏢</div>
   <h1>Mycardium AI — Org Chart</h1>
   <input type="text" id="search-bar" placeholder="Search name, role, department…" />
-  <div id="user-info">
-    <span id="user-name"></span>
-    <button id="sign-out-btn">Sign out</button>
-  </div>
+  <div id="user-info"><span id="user-name"></span><button id="sign-out-btn">Sign out</button></div>
 </header>
-
 <main>
   <div id="auth-screen">
     <div style="font-size:52px;">🏢</div>
@@ -164,25 +127,19 @@
     <p>Sign in with your Mycardium Microsoft 365 account to view the full organisation chart.</p>
     <button id="sign-in-btn">Sign in with Microsoft</button>
   </div>
-
   <div id="status"><div class="spinner"></div><p id="status-msg">Loading…</p></div>
   <div id="error-box"></div>
-
   <div id="chart-ui">
     <div id="toolbar">
       <button id="refresh-btn">↺ Refresh</button>
-      <button id="expand-all-btn">⊞ Expand all</button>
-      <button id="collapse-all-btn">⊟ Collapse all</button>
+      <button id="expand-btn">⊞ Expand all</button>
+      <button id="collapse-btn">⊟ Collapse all</button>
       <span id="people-count"></span>
     </div>
-    <div id="chart-scroll">
-      <div id="chart-canvas"></div>
-    </div>
+    <div id="chart-scroll"><div id="chart-canvas"></div></div>
     <div id="search-results"></div>
   </div>
 </main>
-
-<!-- Detail panel -->
 <div id="detail-panel">
   <button id="detail-close">×</button>
   <h3 style="font-size:13px;font-weight:600;">Person details</h3>
@@ -190,250 +147,246 @@
 </div>
 
 <script>
+// ── Config ────────────────────────────────────────────────────
+const NODE_W = 160, NODE_H = 72, H_GAP = 24, V_GAP = 80, TOGGLE_R = 11;
+
 // ── MSAL ──────────────────────────────────────────────────────
-const msalConfig = {
+const msalInstance = new msal.PublicClientApplication({
   auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI, navigateToLoginRequestUrl: true },
   cache: { cacheLocation: "localStorage" }
-};
-const msalInstance = new msal.PublicClientApplication(msalConfig);
+});
 
 // ── Helpers ───────────────────────────────────────────────────
 const COLORS = ["#185FA5","#0F6E56","#533AB7","#993556","#BA7517","#A32D2D","#3B6D11","#854F0B"];
-function aColor(id) { let h=0; for(let c of (id||"")) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
-function initials(n) { return (n||"?").split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
-function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function $(id) { return document.getElementById(id); }
-function show(id,flex) { $(id).style.display = flex||"block"; }
-function hide(id) { $(id).style.display = "none"; }
-function setMsg(m) { $("status-msg").textContent = m; }
+function aColor(id){ let h=0; for(let c of(id||"")) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
+function initials(n){ return (n||"?").split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function $(id){ return document.getElementById(id); }
+function show(id,d){ $(id).style.display=d||"block"; }
+function hide(id){ $(id).style.display="none"; }
 
 // ── State ─────────────────────────────────────────────────────
-let allUsers=[], byId={}, expandedIds=new Set(), selectedId=null;
+let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null;
 
 // ── Auth ──────────────────────────────────────────────────────
-async function getToken() {
-  const acc = msalInstance.getAllAccounts();
-  if (!acc.length) throw new Error("Not signed in");
-  try { return (await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: acc[0] })).accessToken; }
-  catch { await msalInstance.acquireTokenRedirect({ scopes: SCOPES }); }
+async function getToken(){
+  const acc=msalInstance.getAllAccounts();
+  if(!acc.length) throw new Error("Not signed in");
+  try{ return (await msalInstance.acquireTokenSilent({scopes:SCOPES,account:acc[0]})).accessToken; }
+  catch{ await msalInstance.acquireTokenRedirect({scopes:SCOPES}); }
 }
-async function signIn() {
-  try { await msalInstance.loginRedirect({ scopes: SCOPES }); }
-  catch(e) { showErr("Sign-in failed: "+e.message); }
-}
-function signOut() { msalInstance.logoutRedirect(); }
+async function signIn(){ try{ await msalInstance.loginRedirect({scopes:SCOPES}); }catch(e){ showErr(e.message); } }
+function signOut(){ msalInstance.logoutRedirect(); }
 
 // ── Graph ─────────────────────────────────────────────────────
-async function gGet(path) {
-  const token = await getToken();
-  const r = await fetch("https://graph.microsoft.com/v1.0"+path, { headers:{ Authorization:"Bearer "+token } });
-  if (!r.ok) throw new Error("Graph error "+r.status);
+async function gGet(path){
+  const r=await fetch("https://graph.microsoft.com/v1.0"+path,{headers:{Authorization:"Bearer "+await getToken()}});
+  if(!r.ok) throw new Error("Graph "+r.status);
   return r.json();
 }
-async function fetchUsers() {
-  let users=[], url="/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$top=100";
-  while(url) {
-    const d = await gGet(url.startsWith("http") ? url.replace("https://graph.microsoft.com/v1.0","") : url);
-    users = users.concat(d.value||[]);
-    url = d["@odata.nextLink"] ? d["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
+async function fetchUsers(){
+  let users=[],url="/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$expand=manager($select=id)&$top=100";
+  while(url){
+    const d=await gGet(url.startsWith("http")?url.replace("https://graph.microsoft.com/v1.0",""):url);
+    users=users.concat(d.value||[]);
+    url=d["@odata.nextLink"]?d["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0",""):null;
   }
-  return users.filter(u =>
-    u.displayName &&
-    !u.displayName.startsWith("#") &&
-    u.jobTitle &&
-    u.jobTitle.trim() !== "" &&
-    (u.mail||u.userPrincipalName||"").toLowerCase().includes("@mycardium.com"));
-}
-async function fetchManagers(users) {
-  const map={};
-  const chunks=[]; for(let i=0;i<users.length;i+=10) chunks.push(users.slice(i,i+10));
-  for(const chunk of chunks) {
-    await Promise.all(chunk.map(async u => {
-      try { const m=await gGet(`/users/${u.id}/manager?$select=id`); if(m?.id) map[u.id]=m.id; } catch{}
-    }));
-  }
-  return map;
+  return users.filter(u=>u.displayName&&!u.displayName.startsWith("#")&&u.jobTitle&&u.jobTitle.trim()&&(u.mail||u.userPrincipalName||"").toLowerCase().includes("@mycardium.com"));
 }
 
-// ── Tree build ────────────────────────────────────────────────
-function buildTree(users, managerMap) {
+// ── Tree ──────────────────────────────────────────────────────
+function buildTree(users){
   byId={};
-  users.forEach(u => { byId[u.id]={...u, managerId:managerMap[u.id]||null, reports:[]}; });
-  const roots=[];
-  users.forEach(u => {
-    const mid=managerMap[u.id];
-    if(mid && byId[mid]) byId[mid].reports.push(byId[u.id]);
-    else roots.push(byId[u.id]);
+  users.forEach(u=>{ byId[u.id]={...u,managerId:u.manager?.id||null,reports:[]}; });
+  const r=[];
+  users.forEach(u=>{
+    const mid=u.manager?.id;
+    if(mid&&byId[mid]) byId[mid].reports.push(byId[u.id]);
+    else r.push(byId[u.id]);
   });
-  // sort reports by name
-  function sortNode(n) { n.reports.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||"")); n.reports.forEach(sortNode); }
-  roots.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||""));
-  roots.forEach(sortNode);
-  return roots;
+  function srt(n){ n.reports.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||"")); n.reports.forEach(srt); }
+  r.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||""));
+  r.forEach(srt);
+  return r;
 }
 
-// ── Render tree (top-down with SVG lines) ─────────────────────
-const NODE_W = 160, NODE_H = 72, GAP_X = 20, GAP_Y = 56;
+// ── Layout (compute x,y for each node) ───────────────────────
+function calcSubtreeWidth(node){
+  if(!node.reports.length||!expanded.has(node.id)) return NODE_W;
+  const childrenW = node.reports.reduce((s,c)=>s+calcSubtreeWidth(c),0) + H_GAP*(node.reports.length-1);
+  return Math.max(NODE_W, childrenW);
+}
 
-function treeLayout(node) {
-  const isExp = expandedIds.has(node.id);
-  if (!node.reports.length || !isExp) {
-    node._w = NODE_W; node._x = 0;
-    return;
+function assignPositions(node, offsetX, offsetY, positions){
+  const sw = calcSubtreeWidth(node);
+  const nx = offsetX + (sw-NODE_W)/2;
+  const ny = offsetY;
+  positions[node.id] = {x:nx, y:ny, sw};
+
+  if(node.reports.length && expanded.has(node.id)){
+    let cx = offsetX;
+    const childY = offsetY + NODE_H + V_GAP;
+    node.reports.forEach(c=>{
+      const csw = calcSubtreeWidth(c);
+      assignPositions(c, cx, childY, positions);
+      cx += csw + H_GAP;
+    });
   }
-  node.reports.forEach(c => treeLayout(c));
-  const totalW = node.reports.reduce((s,c) => s+c._w, 0) + GAP_X*(node.reports.length-1);
-  node._w = Math.max(NODE_W, totalW);
-  // position children
-  let cx = 0;
-  node.reports.forEach(c => { c._x = cx + c._w/2 - node._w/2; cx += c._w + GAP_X; });
-  node._x = 0;
 }
 
-function renderTree(node, depth) {
-  const isExp = expandedIds.has(node.id);
-  const hasRep = node.reports.length > 0;
-  const isSel = selectedId === node.id;
-  const color = aColor(node.id);
-  const isCeo = !node.managerId;
+function calcCanvasSize(positions){
+  let maxX=0, maxY=0;
+  Object.values(positions).forEach(p=>{ maxX=Math.max(maxX,p.x+NODE_W); maxY=Math.max(maxY,p.y+NODE_H); });
+  return {w:maxX, h:maxY};
+}
 
-  let html = `<div class="org-node" style="width:${node._w}px;position:relative;">`;
+// ── Render ────────────────────────────────────────────────────
+function renderChart(){
+  const canvas=$("chart-canvas");
+  canvas.innerHTML="";
 
-  // centre the box within the node's allocated width
-  const boxLeft = (node._w - NODE_W) / 2;
-  html += `<div style="display:flex;justify-content:center;">`;
-  html += `<div class="node-box${isCeo?" ceo":""}${isSel?" selected":""}" style="width:${NODE_W}px;" onclick="selectNode('${node.id}')">`;
-  html += `<div class="node-avatar" style="background:${color};">${initials(node.displayName)}</div>`;
-  html += `<div class="node-text"><div class="node-name">${esc(node.displayName)}</div><div class="node-title">${esc(node.jobTitle||node.department||"—")}</div></div>`;
-  if (hasRep) html += `<button class="expand-btn" onclick="event.stopPropagation();toggleExp('${node.id}')">${isExp?"−":"+"+node.reports.length}</button>`;
-  html += `</div></div>`;
+  // compute positions for all visible nodes
+  const positions={};
+  let totalW=0;
+  roots.forEach(root=>{
+    assignPositions(root, totalW, 0, positions);
+    totalW += calcSubtreeWidth(root) + H_GAP*2;
+  });
 
-  if (hasRep && isExp) {
-    const totalChildW = node.reports.reduce((s,c)=>s+c._w,0) + GAP_X*(node.reports.length-1);
-    const svgW = Math.max(node._w, totalChildW);
-    const lineY = GAP_Y;
-    const midX = node._w/2;
+  const {w,h} = calcCanvasSize(positions);
+  canvas.style.width=(w+80)+"px";
+  canvas.style.height=(h+80)+"px";
 
-    // vertical line down from node — no gap, overlaps expand btn
-    html += `<div style="display:flex;justify-content:center;margin-top:-1px;"><div style="width:2px;height:${GAP_Y/2 + 11}px;background:#d1d5db;"></div></div>`;
+  // SVG lines layer
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.classList.add("lines");
+  svg.setAttribute("width",w+80);
+  svg.setAttribute("height",h+80);
+  canvas.appendChild(svg);
 
-    // SVG horizontal connector bar
-    if (node.reports.length > 1) {
-      let firstChildMid = node.reports[0]._x + node._w/2 - (node._w - node._w)/2 + node.reports[0]._w/2 - totalChildW/2 + node._w/2 - node._w/2;
-      // simpler: compute left/right extent of children centres
-      let childCentres = [];
-      let cx2 = (node._w - totalChildW)/2;
-      node.reports.forEach(c => { childCentres.push(cx2 + c._w/2); cx2 += c._w + GAP_X; });
-      const leftMost = childCentres[0];
-      const rightMost = childCentres[childCentres.length-1];
+  function drawLines(node){
+    if(!node.reports.length||!expanded.has(node.id)) return;
+    const p=positions[node.id];
+    const parentMidX = p.x + NODE_W/2;
+    const parentBottomY = p.y + NODE_H;
+    const midY = parentBottomY + V_GAP/2;
 
-      html += `<div style="position:relative;width:${node._w}px;height:${GAP_Y/2}px;">`;
-      html += `<svg width="${node._w}" height="${GAP_Y/2}" style="position:absolute;top:0;left:0;overflow:visible;">`;
-      // horizontal bar
-      html += `<line x1="${leftMost}" y1="${GAP_Y/2-1}" x2="${rightMost}" y2="${GAP_Y/2-1}" stroke="#d1d5db" stroke-width="2"/>`;
-      // vertical drops to each child
-      childCentres.forEach(cx3 => {
-        html += `<line x1="${cx3}" y1="0" x2="${cx3}" y2="${GAP_Y/2}" stroke="#d1d5db" stroke-width="2"/>`;
-      });
-      html += `</svg></div>`;
-    } else {
-      html += `<div style="display:flex;justify-content:center;"><div style="width:2px;height:${GAP_Y/2}px;background:#d1d5db;"></div></div>`;
+    node.reports.forEach(child=>{
+      const cp=positions[child.id];
+      if(!cp) return;
+      const childMidX = cp.x + NODE_W/2;
+
+      // vertical line down from parent centre
+      line(svg, parentMidX, parentBottomY, parentMidX, midY);
+      // horizontal line to child
+      line(svg, parentMidX, midY, childMidX, midY);
+      // vertical line down to child
+      line(svg, childMidX, midY, childMidX, cp.y);
+
+      drawLines(child);
+    });
+  }
+
+  roots.forEach(r=>drawLines(r));
+
+  // Node cards + toggle buttons
+  function renderNodes(node){
+    const p=positions[node.id];
+    if(!p) return;
+
+    // card
+    const card=document.createElement("div");
+    card.className="node-card"+(selectedId===node.id?" selected":"")+((!node.managerId)?" root-node":"");
+    card.style.left=p.x+"px";
+    card.style.top=p.y+"px";
+    card.innerHTML=`<div class="node-avatar" style="background:${aColor(node.id)};">${initials(node.displayName)}</div><div class="node-text"><div class="node-name">${esc(node.displayName)}</div><div class="node-title">${esc(node.jobTitle||node.department||"—")}</div></div>`;
+    card.addEventListener("click",()=>selectNode(node.id));
+    canvas.appendChild(card);
+
+    // toggle button (centred below card)
+    if(node.reports.length){
+      const btn=document.createElement("button");
+      btn.className="toggle-btn";
+      btn.style.left=(p.x+NODE_W/2-TOGGLE_R)+"px";
+      btn.style.top=(p.y+NODE_H-TOGGLE_R)+"px";
+      btn.textContent=expanded.has(node.id)?"−":"+"+node.reports.length;
+      btn.addEventListener("click",e=>{ e.stopPropagation(); toggleNode(node.id); });
+      canvas.appendChild(btn);
     }
 
-    // children row
-    html += `<div style="display:flex;align-items:flex-start;gap:${GAP_X}px;">`;
-    node.reports.forEach(c => { html += renderTree(c, depth+1); });
-    html += `</div>`;
+    if(expanded.has(node.id)) node.reports.forEach(renderNodes);
   }
 
-  html += `</div>`;
-  return html;
+  roots.forEach(renderNodes);
 }
 
-// ── Load & render ─────────────────────────────────────────────
-let roots=[];
-
-async function loadData() {
-  hide("error-box"); show("status","flex"); hide("chart-ui");
-  try {
-    setMsg("Fetching users…");
-    const users = await fetchUsers();
-    setMsg(`Mapping reporting lines for ${users.length} people…`);
-    const mgrs = await fetchManagers(users);
-    allUsers = users;
-    roots = buildTree(users, mgrs);
-    // auto-expand top 2 levels
-    expandedIds = new Set();
-    function autoExp(n, d) { if(d<2 && n.reports.length){ expandedIds.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
-    roots.forEach(r=>autoExp(r,0));
-    $("people-count").textContent = users.length+" people";
-    renderChart();
-    hide("status"); show("chart-ui");
-  } catch(e) {
-    hide("status"); showErr("Failed to load: "+e.message);
-  }
+function line(svg,x1,y1,x2,y2){
+  const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+  l.setAttribute("x1",x1); l.setAttribute("y1",y1);
+  l.setAttribute("x2",x2); l.setAttribute("y2",y2);
+  l.setAttribute("stroke","#c5ccd6"); l.setAttribute("stroke-width","2");
+  svg.appendChild(l);
 }
 
-function renderChart() {
-  roots.forEach(r=>treeLayout(r));
-  $("chart-canvas").innerHTML = roots.map(r=>renderTree(r,0)).join(`<div style="height:40px;"></div>`);
-}
-
-function toggleExp(id) {
-  if(expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
-  selectedId=null; hide("detail-panel");
+function toggleNode(id){
+  if(expanded.has(id)) expanded.delete(id); else expanded.add(id);
   renderChart();
 }
 
-function selectNode(id) {
+function selectNode(id){
   selectedId=id; renderChart(); showDetail(id);
 }
 
+// ── Data load ─────────────────────────────────────────────────
+async function loadData(){
+  hide("error-box"); show("status","flex"); hide("chart-ui");
+  try{
+    $("status-msg").textContent="Fetching users…";
+    const users=await fetchUsers();
+    $("status-msg").textContent=`Building org chart for ${users.length} people…`;
+    allUsers=users;
+    roots=buildTree(users);
+    expanded=new Set();
+    // auto-expand top 2 levels
+    function autoExp(n,d){ if(d<2&&n.reports.length){ expanded.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
+    roots.forEach(r=>autoExp(r,0));
+    $("people-count").textContent=users.length+" people";
+    hide("status"); show("chart-ui");
+    renderChart();
+  }catch(e){ hide("status"); showErr("Failed: "+e.message); }
+}
+
 // ── Detail panel ──────────────────────────────────────────────
-function showDetail(id) {
+function showDetail(id){
   const u=byId[id]; if(!u) return;
-  const color=aColor(u.id);
   const email=u.mail||u.userPrincipalName||"";
   const phone=u.mobilePhone||(u.businessPhones&&u.businessPhones[0])||"";
-  const reps=u.reports?u.reports.length:0;
   $("detail-content").innerHTML=`
-    <div class="d-avatar" style="background:${color};">${initials(u.displayName)}</div>
+    <div class="d-avatar" style="background:${aColor(u.id)};">${initials(u.displayName)}</div>
     <div class="d-name">${esc(u.displayName)}</div>
     <div class="d-role">${esc(u.jobTitle||"")}</div>
-    ${df("Department",u.department)}
-    ${df("Office",u.officeLocation)}
+    ${df("Department",u.department)}${df("Office",u.officeLocation)}
     ${email?`<div class="d-field"><div class="d-label">Email</div><div class="d-value"><a href="mailto:${email}">${esc(email)}</a></div></div>`:""}
     ${phone?`<div class="d-field"><div class="d-label">Phone</div><div class="d-value"><a href="tel:${phone}">${esc(phone)}</a></div></div>`:""}
-    ${df("Direct reports", reps>0?reps+" people":"None")}
-  `;
+    ${df("Direct reports",u.reports?.length?u.reports.length+" people":"None")}`;
   show("detail-panel");
 }
 function df(l,v){ return v?`<div class="d-field"><div class="d-label">${l}</div><div class="d-value">${esc(String(v))}</div></div>`:""; }
 
 // ── Search ────────────────────────────────────────────────────
-function doSearch(q) {
+function doSearch(q){
   const canvas=$("chart-canvas"), results=$("search-results");
   if(!q.trim()){ canvas.style.display=""; results.style.display="none"; return; }
   canvas.style.display="none"; show("search-results","flex");
   const lq=q.toLowerCase();
-  const hits=allUsers.filter(u=>
-    (u.displayName||"").toLowerCase().includes(lq)||
-    (u.jobTitle||"").toLowerCase().includes(lq)||
-    (u.department||"").toLowerCase().includes(lq)||
-    (u.mail||"").toLowerCase().includes(lq)
-  );
-  if(!hits.length){ results.innerHTML=`<div class="no-results">No results for "${esc(q)}"</div>`; return; }
-  results.innerHTML=hits.map(u=>`
-    <div class="result-card${selectedId===u.id?" sel":""}" onclick="selectNode('${u.id}')">
-      <div class="node-avatar" style="background:${aColor(u.id)};width:36px;height:36px;font-size:13px;">${initials(u.displayName)}</div>
-      <div><div class="result-name">${esc(u.displayName)}</div><div class="result-title">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div></div>
-    </div>`).join("");
+  const hits=allUsers.filter(u=>(u.displayName||"").toLowerCase().includes(lq)||(u.jobTitle||"").toLowerCase().includes(lq)||(u.department||"").toLowerCase().includes(lq)||(u.mail||"").toLowerCase().includes(lq));
+  results.innerHTML=hits.length?hits.map(u=>`<div class="result-card" onclick="selectNode('${u.id}')"><div class="node-avatar" style="background:${aColor(u.id)};width:36px;height:36px;font-size:13px;">${initials(u.displayName)}</div><div><div style="font-size:13px;font-weight:500;">${esc(u.displayName)}</div><div style="font-size:11px;color:var(--muted);">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div></div></div>`).join(""):`<div class="no-results">No results for "${esc(q)}"</div>`;
 }
 
-function showErr(msg){ $("error-box").textContent=msg; show("error-box"); }
+function showErr(m){ $("error-box").textContent=m; show("error-box"); }
 
 // ── Init ──────────────────────────────────────────────────────
-async function init() {
+async function init(){
   const accs=msalInstance.getAllAccounts();
   if(!accs.length) return;
   $("user-name").textContent=accs[0].name||accs[0].username;
@@ -445,21 +398,19 @@ async function init() {
   await msalInstance.initialize();
   await msalInstance.handleRedirectPromise().catch(()=>{});
   await init();
-  $("sign-in-btn").addEventListener("click", signIn);
-  $("sign-out-btn").addEventListener("click", signOut);
-  $("refresh-btn").addEventListener("click", loadData);
-  $("expand-all-btn").addEventListener("click", () => {
-    function expAll(n) { if(n.reports.length){ expandedIds.add(n.id); n.reports.forEach(expAll); } }
+  $("sign-in-btn").addEventListener("click",signIn);
+  $("sign-out-btn").addEventListener("click",signOut);
+  $("refresh-btn").addEventListener("click",loadData);
+  $("expand-btn").addEventListener("click",()=>{
+    function expAll(n){ expanded.add(n.id); n.reports.forEach(expAll); }
     roots.forEach(expAll); renderChart();
   });
-  $("collapse-all-btn").addEventListener("click", () => {
-    expandedIds.clear();
-    roots.forEach(r => expandedIds.add(r.id)); // keep top level open
+  $("collapse-btn").addEventListener("click",()=>{
+    expanded.clear(); roots.forEach(r=>expanded.add(r.id));
     selectedId=null; hide("detail-panel"); renderChart();
   });
-  $("detail-close").addEventListener("click", ()=>{ hide("detail-panel"); selectedId=null; renderChart(); });
-  let t;
-  $("search-bar").addEventListener("input", e=>{ clearTimeout(t); t=setTimeout(()=>doSearch(e.target.value),200); });
+  $("detail-close").addEventListener("click",()=>{ hide("detail-panel"); selectedId=null; renderChart(); });
+  let t; $("search-bar").addEventListener("input",e=>{ clearTimeout(t); t=setTimeout(()=>doSearch(e.target.value),200); });
 })();
 </script>
 </body>

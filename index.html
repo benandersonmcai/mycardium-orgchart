@@ -232,7 +232,11 @@ async function fetchUsers() {
     users = users.concat(d.value||[]);
     url = d["@odata.nextLink"] ? d["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
   }
-  return users.filter(u => u.displayName && !u.displayName.startsWith("#") &&
+  return users.filter(u =>
+    u.displayName &&
+    !u.displayName.startsWith("#") &&
+    u.jobTitle &&
+    u.jobTitle.trim() !== "" &&
     (u.mail||u.userPrincipalName||"").toLowerCase().includes("@mycardium.com"));
 }
 async function fetchManagers(users) {

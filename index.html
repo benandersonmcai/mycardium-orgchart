@@ -390,27 +390,54 @@ function renderChart(){
   roots.forEach(r=>drawLines(r));
 
   // Node cards + toggle buttons
+  const nodeClickHandlers = [];
   function renderNodes(node){
     const p=positions[node.id];
     if(!p) return;
 
-    // card
     const card=document.createElement("div");
     card.className="node-card"+(selectedId===node.id?" selected":"")+((!node.managerId)?" root-node":"");
     card.style.left=p.x+"px";
     card.style.top=p.y+"px";
-    card.innerHTML=`<div class="node-avatar" style="background:${aColor(node.id)};">${initials(node.displayName)}</div><div class="node-text"><div class="node-name">${esc(node.displayName)}</div><div class="node-title">${esc(node.jobTitle||node.department||"—")}</div></div>`;
-    card.addEventListener("click",()=>selectNode(node.id));
+
+    const av=document.createElement("div");
+    av.className="node-avatar";
+    av.style.background=aColor(node.id);
+    av.textContent=initials(node.displayName);
+    card.appendChild(av);
+
+    const txt=document.createElement("div");
+    txt.className="node-text";
+    const nm=document.createElement("div");
+    nm.className="node-name";
+    nm.textContent=node.displayName;
+    const tl=document.createElement("div");
+    tl.className="node-title";
+    tl.textContent=node.jobTitle||node.department||"—";
+    txt.appendChild(nm);
+    txt.appendChild(tl);
+    card.appendChild(txt);
+
+    card.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      selectedId=node.id;
+      renderChart();
+      showSpotlight(node.id);
+    });
     canvas.appendChild(card);
 
-    // toggle button (centred below card)
     if(node.reports.length){
       const btn=document.createElement("button");
       btn.className="toggle-btn";
       btn.style.left=(p.x+NODE_W/2-TOGGLE_R)+"px";
       btn.style.top=(p.y+NODE_H-TOGGLE_R)+"px";
       btn.textContent=expanded.has(node.id)?"−":"+"+node.reports.length;
-      btn.addEventListener("click",e=>{ e.stopPropagation(); toggleNode(node.id); });
+      btn.addEventListener("click",(e)=>{
+        e.stopPropagation();
+        if(expanded.has(node.id)) expanded.delete(node.id);
+        else expanded.add(node.id);
+        renderChart();
+      });
       canvas.appendChild(btn);
     }
 

@@ -353,7 +353,7 @@ async function loadData() {
   try {
     setMsg("Fetching users…");
     const users = await fetchUsers();
-    setMsg(`Getting manager relationships for ${users.length} people…`);
+    setMsg(`Mapping reporting lines for ${users.length} people…`);
     const mgrs = await fetchManagers(users);
     allUsers = users;
     roots = buildTree(users, mgrs);

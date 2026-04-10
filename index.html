@@ -693,16 +693,34 @@ function renderRadialView(){
   const canvas=el("chart-canvas");
   canvas.innerHTML="";
   const NW=compact?COMP_W:NODE_W, NH=compact?COMP_H:NODE_H;
-  const RING=NH+80; // px between rings
+  const NODE_GAP=28; // min px gap between card edges on same ring
+  const MIN_RING=NH+60; // min radial gap between rings
 
-  // Always fully expand for radial
   function countLeaves(node){
     if(!node.reports.length) return 1;
     return node.reports.reduce((s,c)=>s+countLeaves(c),0);
   }
 
+  // Count nodes at each depth so we can size each ring correctly
+  function gatherDepth(node,d,map){
+    map[d]=(map[d]||0)+1;
+    node.reports.forEach(c=>gatherDepth(c,d+1,map));
+  }
+  const depthCount={};
+  roots.forEach(r=>gatherDepth(r,0,depthCount));
+
+  // Radius per depth: large enough to fit all nodes at that depth around the circumference
+  const radii={0:0};
+  const maxDepth=Math.max(...Object.keys(depthCount).map(Number));
+  for(let d=1;d<=maxDepth;d++){
+    const n=depthCount[d]||1;
+    const minByCirc=(n*(NW+NODE_GAP))/(2*Math.PI);
+    radii[d]=Math.max((radii[d-1]||0)+MIN_RING, minByCirc);
+  }
+
   const pos={};
-  function assignRadial(node,aStart,aEnd,r){
+  function assignRadial(node,aStart,aEnd,depth){
+    const r=radii[depth]||0;
     const a=(aStart+aEnd)/2;
     pos[node.id]={x:r*Math.cos(a),y:r*Math.sin(a),a,r};
     if(node.reports.length){
@@ -711,14 +729,13 @@ function renderRadialView(){
       node.reports.forEach(child=>{
         const leaves=countLeaves(child);
         const spread=(leaves/total)*(aEnd-aStart);
-        assignRadial(child,ca,ca+spread,r+RING);
+        assignRadial(child,ca,ca+spread,depth+1);
         ca+=spread;
       });
     }
   }
 
   if(roots.length===1){
-    // Root at centre, children fan full circle
     pos[roots[0].id]={x:0,y:0,a:0,r:0};
     if(roots[0].reports.length){
       const total=countLeaves(roots[0]);
@@ -726,7 +743,7 @@ function renderRadialView(){
       roots[0].reports.forEach(child=>{
         const leaves=countLeaves(child);
         const spread=(leaves/total)*2*Math.PI;
-        assignRadial(child,ca,ca+spread,RING);
+        assignRadial(child,ca,ca+spread,1);
         ca+=spread;
       });
     }
@@ -736,7 +753,7 @@ function renderRadialView(){
     roots.forEach(root=>{
       const leaves=countLeaves(root);
       const spread=(leaves/total)*2*Math.PI;
-      assignRadial(root,ca,ca+spread,RING*0.5);
+      assignRadial(root,ca,ca+spread,0);
       ca+=spread;
     });
   }

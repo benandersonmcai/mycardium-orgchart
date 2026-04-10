@@ -1,699 +1,534 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mycardium AI — Org Chart</title>
-
-  <!--
-  ============================================================
-  SETUP INSTRUCTIONS
-  ============================================================
-
-  1. REGISTER AN AZURE AD APP
-     a. Go to https://portal.azure.com → Azure Active Directory → App registrations
-     b. Click "New registration"
-        - Name: "Mycardium Org Chart"
-        - Supported account types: "Accounts in this organizational directory only"
-        - Redirect URI: Select "Single-page application (SPA)"
-          and enter the URL where you'll host this file,
-          e.g. https://mycardium.sharepoint.com/sites/intranet/orgchart/index.html
-          OR for local testing: http://localhost:5500/index.html
-     c. Click Register
-     d. Copy the "Application (client) ID" — paste it below as CLIENT_ID
-     e. Copy the "Directory (tenant) ID" — paste it below as TENANT_ID
-
-  2. GRANT API PERMISSIONS
-     a. Go to API permissions → Add a permission → Microsoft Graph → Delegated
-     b. Add: User.Read, User.ReadBasic.All, People.Read.All
-     c. Click "Grant admin consent for Mycardium AI Ltd"
-
-  3. PASTE YOUR IDs BELOW and deploy this file to your intranet/SharePoint.
-
-  ============================================================
-  -->
-
-  <script>
-    const CLIENT_ID = "84990117-c0bb-431d-ba91-7f2aecaa7514";
-    const TENANT_ID = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
-          const REDIRECT_URI = "https://mycardiumailtd.sharepoint.com/sites/OrganisationalChart";
-    const AUTHORITY = `https://login.microsoftonline.com/${TENANT_ID}`;
-    const SCOPES = ["User.Read", "User.ReadBasic.All", "People.Read.All"];
-  </script>
-
-  <!-- Microsoft Authentication Library (MSAL) -->
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
-
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --blue: #185FA5;
-      --blue-light: #E6F1FB;
-      --text: #1a1a1a;
-      --text-muted: #6b7280;
-      --border: rgba(0,0,0,0.1);
-      --bg: #f9fafb;
-      --card: #ffffff;
-      --radius: 10px;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    header {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    header h1 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-      flex: 1;
-    }
-
-    header .logo {
-      width: 32px;
-      height: 32px;
-      background: var(--blue);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 16px;
-    }
-
-    #search-bar {
-      padding: 8px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      font-size: 14px;
-      width: 260px;
-      outline: none;
-      background: var(--bg);
-    }
-
-    #search-bar:focus { border-color: var(--blue); }
-
-    #user-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    #sign-out-btn {
-      font-size: 12px;
-      padding: 5px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: transparent;
-      cursor: pointer;
-      color: var(--text-muted);
-    }
-
-    #sign-out-btn:hover { background: var(--bg); }
-
-    main { padding: 24px; }
-
-    /* Auth screen */
-    #auth-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 80vh;
-      gap: 20px;
-      text-align: center;
-    }
-
-    #auth-screen h2 { font-size: 22px; font-weight: 600; }
-    #auth-screen p { color: var(--text-muted); font-size: 14px; max-width: 360px; }
-
-    #sign-in-btn {
-      padding: 12px 28px;
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    #sign-in-btn:hover { background: #1450a0; }
-
-    /* Status / spinner */
-    #status {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      padding: 60px 0;
-    }
-
-    .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid var(--blue-light);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    #status p { font-size: 14px; color: var(--text-muted); }
-
-    /* Error */
-    #error-box {
-      background: #fff5f5;
-      border: 1px solid #fca5a5;
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      color: #b91c1c;
-      font-size: 14px;
-      max-width: 500px;
-      margin: 40px auto;
-    }
-
-    /* Toolbar */
-    #toolbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    #people-count {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-left: auto;
-    }
-
-    #refresh-btn {
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--card);
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    #refresh-btn:hover { background: var(--bg); }
-
-    /* Layout: tree + detail panel */
-    #chart-layout {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-    }
-
-    #tree-container {
-      flex: 1;
-      overflow-x: auto;
-      padding-bottom: 20px;
-    }
-
-    /* Search results */
-    #search-results {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    /* Org tree nodes */
-    .tree-root { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; }
-
-    .tree-node { display: flex; flex-direction: column; align-items: center; }
-
-    .node-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
-      cursor: pointer;
-      min-width: 190px;
-      max-width: 230px;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      user-select: none;
-    }
-
-    .node-card:hover { border-color: var(--blue); }
-    .node-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
-
-    .node-info { overflow: hidden; flex: 1; }
-    .node-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .node-title { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-
-    .expand-btn {
-      color: var(--blue);
-      font-weight: 600;
-      font-size: 12px;
-      padding: 0 4px;
-      flex-shrink: 0;
-      cursor: pointer;
-      border: none;
-      background: none;
-    }
-
-    .connector-v { width: 1px; height: 16px; background: var(--border); }
-    .children-row { display: flex; gap: 12px; align-items: flex-start; }
-
-    /* Avatar */
-    .avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 13px;
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    /* Detail panel */
-    #detail-panel {
-      width: 260px;
-      flex-shrink: 0;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      position: sticky;
-      top: 72px;
-    }
-
-    #detail-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
-
-    #detail-close {
-      float: right;
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 18px;
-      color: var(--text-muted);
-      line-height: 1;
-      margin-top: -2px;
-    }
-
-    .detail-avatar {
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 18px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    }
-
-    .detail-name { font-weight: 600; font-size: 15px; }
-    .detail-role { font-size: 12px; color: var(--text-muted); margin-top: 2px; margin-bottom: 14px; }
-
-    .detail-row { margin-bottom: 10px; }
-    .detail-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
-    .detail-value { font-size: 13px; word-break: break-all; }
-    .detail-value a { color: var(--blue); text-decoration: none; }
-    .detail-value a:hover { text-decoration: underline; }
-
-    /* Search result card */
-    .result-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
-      cursor: pointer;
-    }
-
-    .result-card:hover, .result-card.selected { border-color: var(--blue); }
-    .result-info .node-name { font-size: 14px; }
-    .result-info .node-title { font-size: 12px; }
-
-    .no-results { color: var(--text-muted); font-size: 14px; padding: 20px 0; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Mycardium AI — Org Chart</title>
+<script src="https://unpkg.com/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#185FA5;--blue-light:#E6F1FB;
+  --text:#1a1a1a;--muted:#6b7280;
+  --border:#e5e7eb;--bg:#f3f4f6;--card:#fff;
+  --line:#c5ccd6;--radius:8px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:200;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.logo{width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0}
+header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
+#search-bar{padding:7px 14px;border-radius:20px;border:1px solid var(--border);font-size:13px;width:240px;outline:none;background:var(--bg);display:none}
+#search-bar:focus{border-color:var(--blue)}
+#user-info{display:none;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+#sign-out-btn{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--muted)}
+#auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;gap:18px;text-align:center;padding:2rem}
+#auth-screen h2{font-size:22px;font-weight:600}
+#auth-screen p{color:var(--muted);font-size:14px;max-width:340px}
+#sign-in-btn{padding:11px 28px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer}
+#status{display:none;flex-direction:column;align-items:center;gap:14px;padding:80px 0}
+.spinner{width:36px;height:36px;border:3px solid var(--blue-light);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#status p{font-size:14px;color:var(--muted)}
+#error-box{display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:var(--radius);padding:14px 18px;color:#b91c1c;font-size:13px;max-width:480px;margin:40px auto}
+#chart-ui{display:none}
+#toolbar{display:flex;align-items:center;gap:8px;padding:14px 24px;flex-wrap:wrap}
+#toolbar button{font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;color:var(--muted)}
+#toolbar button:hover{background:var(--bg);color:var(--text)}
+#people-count{font-size:12px;color:var(--muted);margin-left:auto}
+#chart-scroll{overflow:auto;padding:32px 40px 60px;cursor:grab;user-select:none}
+#chart-scroll:active{cursor:grabbing}
+#chart-wrap{transform-origin:top left;transition:transform 0.15s ease}
+#chart-canvas{position:relative;display:inline-block}
+#chart-canvas svg.lines{position:absolute;top:0;left:0;pointer-events:none;overflow:visible}
+.node-card{position:absolute;width:200px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:border-color 0.15s,box-shadow 0.15s;user-select:none;min-height:80px}
+.node-card:hover{border-color:var(--blue)}
+.node-card.selected{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-light)}
+.node-card.root-node{border-color:var(--blue);background:var(--blue-light)}
+.node-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;flex-shrink:0}
+.node-text{overflow:hidden;flex:1;min-width:0}
+.node-name{font-size:12px;font-weight:600;white-space:normal;word-break:break-word;line-height:1.3}
+.node-title{font-size:10px;color:var(--muted);white-space:normal;word-break:break-word;margin-top:3px;line-height:1.3}
+.toggle-btn{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--card);border:1.5px solid var(--line);font-size:12px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background 0.15s}
+.toggle-btn:hover{background:var(--blue-light);border-color:var(--blue)}
+#search-results{display:none;padding:16px 24px;flex-direction:column;gap:8px;max-width:600px}
+.result-card{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);cursor:pointer}
+.result-card:hover{border-color:var(--blue)}
+.no-results{color:var(--muted);font-size:13px;padding:20px 0}
+/* Zoom */
+#zoom-controls{position:fixed;bottom:24px;right:24px;display:none;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:300}
+#zoom-controls button{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:transparent;font-size:16px;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center}
+#zoom-controls button:hover{background:var(--bg)}
+#zoom-label{font-size:12px;color:var(--muted);min-width:38px;text-align:center}
+#zoom-slider{width:80px;accent-color:var(--blue);cursor:pointer}
+/* Minimap */
+#minimap-wrap{position:fixed;bottom:24px;left:24px;display:none;flex-direction:column;align-items:flex-start;gap:4px;z-index:300}
+#minimap-label{font-size:10px;color:var(--muted);padding-left:2px}
+#minimap-canvas{width:180px;height:120px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);cursor:grab;position:relative;overflow:hidden}
+#minimap-canvas:active{cursor:grabbing}
+#minimap-viewport{position:absolute;border:2px solid var(--blue);background:rgba(24,95,165,0.1);border-radius:2px;pointer-events:none}
+/* Spotlight */
+#spotlight-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center}
+#spotlight-card{background:var(--card);border-radius:14px;padding:28px;width:360px;max-width:90vw;position:relative;max-height:90vh;overflow-y:auto}
+#spotlight-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.sp-avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700;margin-bottom:14px}
+.sp-name{font-size:18px;font-weight:700;margin-bottom:4px}
+.sp-role{font-size:13px;color:var(--muted);margin-bottom:18px}
+.sp-section{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin:14px 0 8px}
+.sp-field{display:flex;gap:10px;margin-bottom:8px;font-size:13px}
+.sp-label{color:var(--muted);width:80px;flex-shrink:0}
+.sp-val a{color:var(--blue);text-decoration:none}
+.sp-reports{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.sp-chip{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--bg);font-size:12px;cursor:pointer}
+.sp-chip:hover{border-color:var(--blue);background:var(--blue-light)}
+.sp-chip-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;flex-shrink:0}
+</style>
 </head>
 <body>
-
 <header>
   <div class="logo">🏢</div>
   <h1>Mycardium AI — Org Chart</h1>
-  <input type="text" id="search-bar" placeholder="Search people, roles, departments…" style="display:none;" />
-  <div id="user-info" style="display:none;">
-    <span id="user-name"></span>
-    <button id="sign-out-btn">Sign out</button>
-  </div>
+  <input type="text" id="search-bar" placeholder="Search name, role, department…"/>
+  <div id="user-info"><span id="user-name"></span><button id="sign-out-btn">Sign out</button></div>
 </header>
-
 <main>
-  <!-- Auth screen -->
   <div id="auth-screen">
-    <div style="font-size:48px;">🏢</div>
+    <div style="font-size:52px">🏢</div>
     <h2>Mycardium AI Org Chart</h2>
-    <p>Sign in with your Mycardium Microsoft 365 account to view the organisation chart.</p>
+    <p>Sign in with your Mycardium Microsoft 365 account to view the full organisation chart.</p>
     <button id="sign-in-btn">Sign in with Microsoft</button>
   </div>
-
-  <!-- Loading -->
-  <div id="status" style="display:none;">
-    <div class="spinner"></div>
-    <p id="status-msg">Loading organisation…</p>
-  </div>
-
-  <!-- Error -->
-  <div id="error-box" style="display:none;"></div>
-
-  <!-- Main chart UI -->
-  <div id="chart-ui" style="display:none;">
+  <div id="status"><div class="spinner"></div><p id="status-msg">Loading…</p></div>
+  <div id="error-box"></div>
+  <div id="chart-ui">
     <div id="toolbar">
       <button id="refresh-btn">↺ Refresh</button>
+      <button id="expand-btn">⊞ Expand all</button>
+      <button id="collapse-btn">⊟ Collapse all</button>
       <span id="people-count"></span>
     </div>
-    <div id="chart-layout">
-      <div id="tree-container">
-        <div id="tree-root" class="tree-root"></div>
-        <div id="search-results" style="display:none;"></div>
-      </div>
-      <div id="detail-panel" style="display:none;">
-        <h3>Details <button id="detail-close">×</button></h3>
-        <div id="detail-content"></div>
-      </div>
-    </div>
+    <div id="chart-scroll"><div id="chart-wrap"><div id="chart-canvas"></div></div></div>
+    <div id="search-results"></div>
   </div>
 </main>
 
+<div id="minimap-wrap">
+  <div id="minimap-label">Overview</div>
+  <div id="minimap-canvas"><canvas id="minimap-draw"></canvas><div id="minimap-viewport"></div></div>
+</div>
+<div id="zoom-controls">
+  <button id="zoom-out-btn">−</button>
+  <input type="range" id="zoom-slider" min="20" max="150" value="100" step="5"/>
+  <button id="zoom-in-btn">+</button>
+  <span id="zoom-label">100%</span>
+  <button id="fit-btn" style="width:auto;padding:0 8px;font-size:12px">Fit</button>
+</div>
+<div id="spotlight-overlay">
+  <div id="spotlight-card">
+    <button id="spotlight-close">×</button>
+    <div id="spotlight-content"></div>
+  </div>
+</div>
+
 <script>
-// ─── MSAL setup ───────────────────────────────────────────────
-const msalConfig = {
-  auth: {
-    clientId: CLIENT_ID,
-    authority: AUTHORITY,
-    redirectUri: REDIRECT_URI,
-    navigateToLoginRequestUrl: true,
-  },
-  cache: { cacheLocation: "localStorage" }
-};
+// Everything in one IIFE to avoid any global scope issues
+(function(){
 
-const msalInstance = new msal.PublicClientApplication(msalConfig);
+const CLIENT_ID  = "84990117-c0bb-431d-ba91-7f2aecaa7514";
+const TENANT_ID  = "1048dcfd-c894-4b3a-8d27-12b512e21b22";
+const REDIRECT_URI = "https://benandersonmcai.github.io/mycardium-orgchart/";
+const AUTHORITY  = "https://login.microsoftonline.com/" + TENANT_ID;
+const SCOPES     = ["User.Read","User.ReadBasic.All","People.Read.All","Directory.Read.All"];
+const NODE_W=200, NODE_H=80, H_GAP=24, V_GAP=90, TOGGLE_R=11, MM_W=180, MM_H=120;
+const COLORS=["#185FA5","#0F6E56","#533AB7","#993556","#BA7517","#A32D2D","#3B6D11","#854F0B"];
 
-// ─── State ────────────────────────────────────────────────────
-let allUsers = [];
-let selectedId = null;
-let expandedIds = new Set();
+// ── Helpers ───────────────────────────────────────────────────
+function g(id){ return document.getElementById(id); }
+function show(id,d){ g(id).style.display=d||"block"; }
+function hide(id){ g(id).style.display="none"; }
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function aColor(id){ let h=0; for(let c of(id||"")) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
+function initials(n){ return (n||"?").split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+function showErr(m){ g("error-box").textContent=m; show("error-box"); }
+function setMsg(m){ g("status-msg").textContent=m; }
 
-// ─── Helpers ──────────────────────────────────────────────────
-const COLORS = ["#185FA5","#0F6E56","#533AB7","#993556","#BA7517","#A32D2D","#3B6D11","#854F0B"];
-function avatarColor(id) { let h=0; for(let c of id) h=(h*31+c.charCodeAt(0))&0xffff; return COLORS[h%COLORS.length]; }
-function initials(name) { if(!name) return "?"; return name.split(" ").map(p=>p[0]).join("").toUpperCase().slice(0,2); }
+// ── State ─────────────────────────────────────────────────────
+let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100;
 
-function show(id) { document.getElementById(id).style.display = ""; }
-function hide(id) { document.getElementById(id).style.display = "none"; }
-function setStatus(msg) { document.getElementById("status-msg").textContent = msg; }
-function showError(msg) { const el = document.getElementById("error-box"); el.textContent = msg; show("error-box"); }
+// ── MSAL ──────────────────────────────────────────────────────
+const msalInstance = new msal.PublicClientApplication({
+  auth:{ clientId:CLIENT_ID, authority:AUTHORITY, redirectUri:REDIRECT_URI, navigateToLoginRequestUrl:true },
+  cache:{ cacheLocation:"localStorage" }
+});
 
-// ─── Auth ─────────────────────────────────────────────────────
-async function getToken() {
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) throw new Error("Not signed in");
-  try {
-    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
-    return r.accessToken;
-  } catch {
-    await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
-  }
+async function getToken(){
+  const acc=msalInstance.getAllAccounts();
+  if(!acc.length) throw new Error("Not signed in");
+  try{ return (await msalInstance.acquireTokenSilent({scopes:SCOPES,account:acc[0]})).accessToken; }
+  catch(e){ await msalInstance.acquireTokenRedirect({scopes:SCOPES}); }
 }
+async function signIn(){ try{ await msalInstance.loginRedirect({scopes:SCOPES}); }catch(e){ showErr(e.message); } }
+function signOut(){ msalInstance.logoutRedirect(); }
 
-async function signIn() {
-  try {
-    await msalInstance.loginRedirect({ scopes: SCOPES });
-  } catch(e) {
-    showError("Sign-in failed: " + e.message);
-  }
-}
-
-function signOut() {
-  msalInstance.logoutRedirect();
-}
-
-// ─── Graph API ────────────────────────────────────────────────
-async function graphGet(path) {
-  const token = await getToken();
-  const r = await fetch("https://graph.microsoft.com/v1.0" + path, {
-    headers: { Authorization: "Bearer " + token }
-  });
-  if (!r.ok) throw new Error(`Graph API error ${r.status} on ${path}`);
+// ── Graph ─────────────────────────────────────────────────────
+async function gGet(path){
+  const token=await getToken();
+  const r=await fetch("https://graph.microsoft.com/v1.0"+path,{headers:{Authorization:"Bearer "+token}});
+  if(!r.ok) throw new Error("Graph "+r.status);
   return r.json();
 }
-
-async function getAllUsers() {
-  let users = [];
-  let url = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$top=100";
-  while (url) {
-    const data = await graphGet(url.startsWith("http") ? url.replace("https://graph.microsoft.com/v1.0","") : url);
-    users = users.concat(data.value || []);
-    url = data["@odata.nextLink"] ? data["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0","") : null;
+async function fetchUsers(){
+  let users=[],url="/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,mobilePhone,businessPhones&$expand=manager($select=id)&$top=100";
+  while(url){
+    const d=await gGet(url.startsWith("http")?url.replace("https://graph.microsoft.com/v1.0",""):url);
+    users=users.concat(d.value||[]);
+    url=d["@odata.nextLink"]?d["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0",""):null;
   }
-  return users.filter(u => u.displayName && !u.displayName.startsWith("#"));
+  return users.filter(u=>u.displayName&&!u.displayName.startsWith("#")&&u.jobTitle&&u.jobTitle.trim()&&(u.mail||u.userPrincipalName||"").toLowerCase().includes("@mycardium.com"));
 }
 
-async function getManagerIds(users) {
-  const managerMap = {};
-  // Batch in groups of 10 using Promise.all
-  const chunks = [];
-  for (let i = 0; i < users.length; i += 10) chunks.push(users.slice(i, i+10));
-  for (const chunk of chunks) {
-    await Promise.all(chunk.map(async u => {
-      try {
-        const m = await graphGet(`/users/${u.id}/manager?$select=id`);
-        if (m && m.id) managerMap[u.id] = m.id;
-      } catch { /* no manager */ }
-    }));
-  }
-  return managerMap;
-}
-
-// ─── Build tree ───────────────────────────────────────────────
-function buildTree(users, managerMap) {
-  const byId = {};
-  users.forEach(u => { byId[u.id] = { ...u, managerId: managerMap[u.id] || null, reports: [] }; });
-  const roots = [];
-  users.forEach(u => {
-    const mid = managerMap[u.id];
-    if (mid && byId[mid]) byId[mid].reports.push(byId[u.id]);
-    else roots.push(byId[u.id]);
+// ── Tree ──────────────────────────────────────────────────────
+function buildTree(users){
+  byId={};
+  users.forEach(u=>{ byId[u.id]={...u,managerId:u.manager?.id||null,reports:[]}; });
+  const r=[];
+  users.forEach(u=>{
+    const mid=u.manager?.id;
+    if(mid&&byId[mid]) byId[mid].reports.push(byId[u.id]);
+    else r.push(byId[u.id]);
   });
-  return { roots, byId };
+  function srt(n){ n.reports.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||"")); n.reports.forEach(srt); }
+  r.sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||"")); r.forEach(srt);
+  return r;
 }
 
-// ─── Render tree ──────────────────────────────────────────────
-function renderAvatar(name, id, size=36) {
-  const color = avatarColor(id || name);
-  return `<div class="avatar" style="width:${size}px;height:${size}px;background:${color};font-size:${Math.round(size*0.35)}px;">${initials(name)}</div>`;
-}
-
-function renderNode(node, depth) {
-  const isExpanded = expandedIds.has(node.id) || depth < 2;
-  const hasReports = node.reports && node.reports.length > 0;
-  const isSelected = selectedId === node.id;
-
-  let html = `<div class="tree-node" data-id="${node.id}">`;
-  html += `<div class="node-card${isSelected ? " selected" : ""}" onclick="selectNode('${node.id}')">`;
-  html += renderAvatar(node.displayName, node.id, 36);
-  html += `<div class="node-info">
-    <div class="node-name">${esc(node.displayName)}</div>
-    <div class="node-title">${esc(node.jobTitle || node.department || "—")}</div>
-  </div>`;
-  if (hasReports) {
-    html += `<button class="expand-btn" onclick="event.stopPropagation();toggleExpand('${node.id}')">${isExpanded ? "−" : "+"+node.reports.length}</button>`;
+// ── Layout ────────────────────────────────────────────────────
+function subW(node){ if(!node.reports.length||!expanded.has(node.id)) return NODE_W; return Math.max(NODE_W,node.reports.reduce((s,c)=>s+subW(c),0)+H_GAP*(node.reports.length-1)); }
+function assignPos(node,ox,oy,pos){
+  const sw=subW(node);
+  pos[node.id]={x:ox+(sw-NODE_W)/2,y:oy,sw};
+  if(node.reports.length&&expanded.has(node.id)){
+    let cx=ox; const cy=oy+NODE_H+V_GAP;
+    node.reports.forEach(c=>{ assignPos(c,cx,cy,pos); cx+=subW(c)+H_GAP; });
   }
-  html += `</div>`;
+}
 
-  if (hasReports && isExpanded) {
-    html += `<div class="connector-v"></div><div class="children-row">`;
-    node.reports.forEach(child => {
-      html += `<div style="display:flex;flex-direction:column;align-items:center;">
-        <div class="connector-v"></div>${renderNode(child, depth+1)}</div>`;
+// ── Render ────────────────────────────────────────────────────
+function renderChart(){
+  const canvas=g("chart-canvas");
+  canvas.innerHTML="";
+  const pos={};
+  let tx=0;
+  roots.forEach(r=>{ assignPos(r,tx,0,pos); tx+=subW(r)+H_GAP*2; });
+  let mxX=0,mxY=0;
+  Object.values(pos).forEach(p=>{ mxX=Math.max(mxX,p.x+NODE_W); mxY=Math.max(mxY,p.y+NODE_H); });
+  canvas.style.width=(mxX+80)+"px";
+  canvas.style.height=(mxY+80)+"px";
+
+  // SVG lines
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.classList.add("lines");
+  svg.setAttribute("width",mxX+80); svg.setAttribute("height",mxY+80);
+  canvas.appendChild(svg);
+
+  function drawLines(node){
+    if(!node.reports.length||!expanded.has(node.id)) return;
+    const p=pos[node.id];
+    const px=p.x+NODE_W/2, py=p.y+NODE_H, my=py+V_GAP/2;
+    node.reports.forEach(child=>{
+      const cp=pos[child.id]; if(!cp) return;
+      const cx=cp.x+NODE_W/2;
+      mkLine(svg,px,py,px,my);
+      mkLine(svg,px,my,cx,my);
+      mkLine(svg,cx,my,cx,cp.y);
+      drawLines(child);
     });
-    html += `</div>`;
+  }
+  roots.forEach(r=>drawLines(r));
+
+  // Nodes
+  function mkNode(node){
+    const p=pos[node.id]; if(!p) return;
+    const card=document.createElement("div");
+    card.className="node-card"+(selectedId===node.id?" selected":"")+(!node.managerId?" root-node":"");
+    card.style.cssText=`left:${p.x}px;top:${p.y}px;`;
+
+    const av=document.createElement("div");
+    av.className="node-avatar";
+    av.style.background=aColor(node.id);
+    av.textContent=initials(node.displayName);
+
+    const tx=document.createElement("div");
+    tx.className="node-text";
+    const nm=document.createElement("div");
+    nm.className="node-name";
+    nm.textContent=node.displayName;
+    const tl=document.createElement("div");
+    tl.className="node-title";
+    tl.textContent=node.jobTitle||node.department||"—";
+    tx.appendChild(nm); tx.appendChild(tl);
+    card.appendChild(av); card.appendChild(tx);
+
+    // capture node.id in closure
+    (function(nid){
+      card.addEventListener("click",function(e){
+        e.stopPropagation();
+        selectedId=nid;
+        renderChart();
+        openSpotlight(nid);
+      });
+    })(node.id);
+
+    canvas.appendChild(card);
+
+    if(node.reports.length){
+      const btn=document.createElement("button");
+      btn.className="toggle-btn";
+      btn.style.cssText=`left:${p.x+NODE_W/2-TOGGLE_R}px;top:${p.y+NODE_H-TOGGLE_R}px;`;
+      btn.textContent=expanded.has(node.id)?"−":"+"+node.reports.length;
+      (function(nid){
+        btn.addEventListener("click",function(e){
+          e.stopPropagation();
+          if(expanded.has(nid)) expanded.delete(nid); else expanded.add(nid);
+          renderChart();
+        });
+      })(node.id);
+      canvas.appendChild(btn);
+    }
+    if(expanded.has(node.id)) node.reports.forEach(mkNode);
+  }
+  roots.forEach(mkNode);
+  setTimeout(updateMinimap,50);
+}
+
+function mkLine(svg,x1,y1,x2,y2){
+  const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+  l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);
+  l.setAttribute("stroke","#c5ccd6");l.setAttribute("stroke-width","2");
+  svg.appendChild(l);
+}
+
+// ── Spotlight ─────────────────────────────────────────────────
+function openSpotlight(id){
+  const u=byId[id]; if(!u) return;
+  const sc=g("spotlight-content");
+  sc.innerHTML="";
+
+  const av=document.createElement("div");
+  av.className="sp-avatar"; av.style.background=aColor(u.id); av.textContent=initials(u.displayName);
+  const nm=document.createElement("div"); nm.className="sp-name"; nm.textContent=u.displayName;
+  const rl=document.createElement("div"); rl.className="sp-role"; rl.textContent=u.jobTitle||"";
+  sc.appendChild(av); sc.appendChild(nm); sc.appendChild(rl);
+
+  function addField(label,val,isLink,href){
+    if(!val) return;
+    const sec=document.createElement("div"); sec.className="sp-field";
+    const lb=document.createElement("span"); lb.className="sp-label"; lb.textContent=label;
+    const vl=document.createElement("span"); vl.className="sp-val";
+    if(isLink){ const a=document.createElement("a"); a.href=href||val; a.textContent=val; vl.appendChild(a); }
+    else vl.textContent=val;
+    sec.appendChild(lb); sec.appendChild(vl); sc.appendChild(sec);
   }
 
-  html += `</div>`;
-  return html;
-}
+  function addSection(title){ const s=document.createElement("div"); s.className="sp-section"; s.textContent=title; sc.appendChild(s); }
 
-function rerenderTree() {
-  const { roots } = window._tree;
-  const container = document.getElementById("tree-root");
-  container.innerHTML = roots.map(r => renderNode(r, 0)).join("");
-}
+  addSection("Contact");
+  const email=u.mail||u.userPrincipalName||"";
+  const phone=u.mobilePhone||(u.businessPhones&&u.businessPhones[0])||"";
+  addField("Email",email,true,"mailto:"+email);
+  addField("Phone",phone,true,"tel:"+phone);
+  addField("Department",u.department);
+  addField("Office",u.officeLocation);
 
-function toggleExpand(id) {
-  if (expandedIds.has(id)) expandedIds.delete(id);
-  else expandedIds.add(id);
-  rerenderTree();
-}
-
-function selectNode(id) {
-  selectedId = id;
-  rerenderTree();
-  showDetail(id);
-}
-
-// ─── Detail panel ─────────────────────────────────────────────
-function showDetail(id) {
-  const { byId } = window._tree;
-  const u = byId[id];
-  if (!u) return;
-  const color = avatarColor(u.id);
-  const email = u.mail || u.userPrincipalName || "";
-  const phone = u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || "";
-  const reportCount = u.reports ? u.reports.length : 0;
-
-  document.getElementById("detail-content").innerHTML = `
-    <div class="detail-avatar" style="background:${color};">${initials(u.displayName)}</div>
-    <div class="detail-name">${esc(u.displayName)}</div>
-    <div class="detail-role">${esc(u.jobTitle || "")}</div>
-    ${field("Department", u.department)}
-    ${field("Office", u.officeLocation)}
-    ${email ? `<div class="detail-row"><div class="detail-label">Email</div><div class="detail-value"><a href="mailto:${email}">${esc(email)}</a></div></div>` : ""}
-    ${phone ? `<div class="detail-row"><div class="detail-label">Phone</div><div class="detail-value"><a href="tel:${phone}">${esc(phone)}</a></div></div>` : ""}
-    ${field("Direct reports", reportCount > 0 ? reportCount + " people" : "None")}
-  `;
-  show("detail-panel");
-}
-
-function field(label, val) {
-  if (!val) return "";
-  return `<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-value">${esc(String(val))}</div></div>`;
-}
-
-function esc(str) {
-  if (!str) return "";
-  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-// ─── Search ───────────────────────────────────────────────────
-function doSearch(q) {
-  const treeEl = document.getElementById("tree-root");
-  const resultsEl = document.getElementById("search-results");
-  if (!q.trim()) {
-    treeEl.style.display = "";
-    resultsEl.style.display = "none";
-    return;
+  const manager=u.managerId&&byId[u.managerId];
+  if(manager){
+    addSection("Manager");
+    const row=document.createElement("div"); row.className="sp-reports";
+    row.appendChild(makeChip(manager));
+    sc.appendChild(row);
   }
-  treeEl.style.display = "none";
-  resultsEl.style.display = "";
-  const lq = q.toLowerCase();
-  const matches = allUsers.filter(u =>
-    (u.displayName||"").toLowerCase().includes(lq) ||
-    (u.jobTitle||"").toLowerCase().includes(lq) ||
-    (u.department||"").toLowerCase().includes(lq) ||
-    (u.mail||"").toLowerCase().includes(lq)
-  );
-  if (matches.length === 0) {
-    resultsEl.innerHTML = `<div class="no-results">No results for "${esc(q)}"</div>`;
-    return;
+  const reports=u.reports||[];
+  if(reports.length){
+    addSection("Direct reports ("+reports.length+")");
+    const row=document.createElement("div"); row.className="sp-reports";
+    reports.forEach(r=>row.appendChild(makeChip(r)));
+    sc.appendChild(row);
   }
-  resultsEl.innerHTML = matches.map(u => `
-    <div class="result-card${selectedId===u.id?" selected":""}" onclick="selectNode('${u.id}')">
-      ${renderAvatar(u.displayName, u.id, 36)}
-      <div class="result-info">
-        <div class="node-name">${esc(u.displayName)}</div>
-        <div class="node-title">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div>
-      </div>
-    </div>
-  `).join("");
+  show("spotlight-overlay","flex");
 }
 
-// ─── Main init ────────────────────────────────────────────────
-async function loadData() {
-  hide("error-box");
-  show("status");
-  hide("chart-ui");
-
-  try {
-    setStatus("Fetching all users…");
-    const users = await getAllUsers();
-
-    setStatus(`Fetching manager relationships for ${users.length} people…`);
-    const managerMap = await getManagerIds(users);
-
-    allUsers = users;
-    window._tree = buildTree(users, managerMap);
-
-    document.getElementById("people-count").textContent = users.length + " people";
-
-    rerenderTree();
-    hide("status");
-    show("chart-ui");
-
-  } catch(e) {
-    hide("status");
-    showError("Failed to load org data: " + e.message);
-  }
+function makeChip(person){
+  const chip=document.createElement("div"); chip.className="sp-chip";
+  const av=document.createElement("div"); av.className="sp-chip-av"; av.style.background=aColor(person.id); av.textContent=initials(person.displayName);
+  const nm=document.createElement("span"); nm.textContent=person.displayName;
+  chip.appendChild(av); chip.appendChild(nm);
+  chip.addEventListener("click",function(){ openSpotlight(person.id); });
+  return chip;
 }
 
-async function init() {
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) return; // stay on auth screen
+// ── Zoom ──────────────────────────────────────────────────────
+function setZoom(z,skipSlider){
+  zoomLevel=Math.min(150,Math.max(20,z));
+  g("chart-wrap").style.transform="scale("+zoomLevel/100+")";
+  g("zoom-label").textContent=zoomLevel+"%";
+  if(!skipSlider) g("zoom-slider").value=zoomLevel;
+  setTimeout(updateMinimap,50);
+}
+function fitToScreen(){
+  const scroll=g("chart-scroll"), canvas=g("chart-canvas");
+  const scW=scroll.clientWidth-80, scH=scroll.clientHeight-80;
+  const cnW=canvas.offsetWidth||1, cnH=canvas.offsetHeight||1;
+  setZoom(Math.min(150,Math.max(20,Math.floor(Math.min(scW/cnW,scH/cnH)*100))));
+  scroll.scrollTo(0,0);
+}
 
-  const account = accounts[0];
-  document.getElementById("user-name").textContent = account.name || account.username;
+// ── Minimap ───────────────────────────────────────────────────
+function updateMinimap(){
+  const canvas=g("chart-canvas"), scroll=g("chart-scroll");
+  const mc=g("minimap-draw"), vp=g("minimap-viewport");
+  const cw=canvas.offsetWidth||1, ch=canvas.offsetHeight||1;
+  const scale=Math.min(MM_W/cw,MM_H/ch);
+  const dw=cw*scale, dh=ch*scale;
+  mc.width=MM_W; mc.height=MM_H;
+  const ctx=mc.getContext("2d");
+  ctx.clearRect(0,0,MM_W,MM_H);
+  ctx.fillStyle="#f3f4f6"; ctx.fillRect(0,0,MM_W,MM_H);
+  const ox=(MM_W-dw)/2, oy=(MM_H-dh)/2;
+  canvas.querySelectorAll(".node-card").forEach(card=>{
+    const x=parseFloat(card.style.left)||0, y=parseFloat(card.style.top)||0;
+    ctx.fillStyle=card.classList.contains("selected")?"#185FA5":card.classList.contains("root-node")?"#bfd6f0":"#fff";
+    ctx.strokeStyle=card.classList.contains("root-node")||card.classList.contains("selected")?"#185FA5":"#d1d5db";
+    ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.roundRect(ox+x*scale,oy+y*scale,NODE_W*scale,NODE_H*scale,2); ctx.fill(); ctx.stroke();
+  });
+  ctx.strokeStyle="#c5ccd6"; ctx.lineWidth=0.5;
+  canvas.querySelectorAll("svg.lines line").forEach(l=>{
+    ctx.beginPath();
+    ctx.moveTo(ox+parseFloat(l.getAttribute("x1"))*scale,oy+parseFloat(l.getAttribute("y1"))*scale);
+    ctx.lineTo(ox+parseFloat(l.getAttribute("x2"))*scale,oy+parseFloat(l.getAttribute("y2"))*scale);
+    ctx.stroke();
+  });
+  const visW=scroll.clientWidth/(zoomLevel/100), visH=scroll.clientHeight/(zoomLevel/100);
+  vp.style.left=(ox+scroll.scrollLeft*scale)+"px";
+  vp.style.top=(oy+scroll.scrollTop*scale)+"px";
+  vp.style.width=Math.min(visW*scale,dw)+"px";
+  vp.style.height=Math.min(visH*scale,dh)+"px";
+}
 
-  hide("auth-screen");
-  show("search-bar");
-  show("user-info");
+// ── Minimap drag ──────────────────────────────────────────────
+(function(){
+  const mm=g("minimap-canvas"); let drag=false;
+  function mmScroll(e){
+    const canvas=g("chart-canvas"),scroll=g("chart-scroll");
+    const cw=canvas.offsetWidth||1,ch=canvas.offsetHeight||1;
+    const scale=Math.min(MM_W/cw,MM_H/ch);
+    const ox=(MM_W-cw*scale)/2,oy=(MM_H-ch*scale)/2;
+    const rect=mm.getBoundingClientRect();
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    scroll.scrollLeft=((cx-rect.left-ox)/scale)*(zoomLevel/100)-scroll.clientWidth/2;
+    scroll.scrollTop=((cy-rect.top-oy)/scale)*(zoomLevel/100)-scroll.clientHeight/2;
+    updateMinimap();
+  }
+  mm.addEventListener("mousedown",e=>{drag=true;mmScroll(e);e.preventDefault();});
+  mm.addEventListener("touchstart",e=>{drag=true;mmScroll(e);e.preventDefault();},{passive:false});
+  window.addEventListener("mousemove",e=>{if(drag)mmScroll(e);});
+  window.addEventListener("touchmove",e=>{if(drag)mmScroll(e);},{passive:false});
+  window.addEventListener("mouseup",()=>drag=false);
+  window.addEventListener("touchend",()=>drag=false);
+})();
 
+// ── Chart drag ────────────────────────────────────────────────
+(function(){
+  const scroll=g("chart-scroll");
+  let down=false,moved=false,sx=0,sy=0,slx=0,sly=0;
+  scroll.addEventListener("mousedown",e=>{
+    if(e.target.closest(".node-card,.toggle-btn")) return;
+    down=true;moved=false;sx=e.clientX;sy=e.clientY;slx=scroll.scrollLeft;sly=scroll.scrollTop;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",e=>{
+    if(!down) return;
+    const dx=e.clientX-sx,dy=e.clientY-sy;
+    if(!moved&&Math.abs(dx)<3&&Math.abs(dy)<3) return;
+    moved=true; scroll.style.cursor="grabbing";
+    scroll.scrollLeft=slx-dx; scroll.scrollTop=sly-dy;
+    updateMinimap();
+  });
+  window.addEventListener("mouseup",()=>{down=false;moved=false;scroll.style.cursor="grab";});
+})();
+
+// ── Search ────────────────────────────────────────────────────
+function doSearch(q){
+  const canvas=g("chart-canvas"),results=g("search-results");
+  if(!q.trim()){ canvas.style.display=""; results.style.display="none"; return; }
+  canvas.style.display="none"; show("search-results","flex");
+  const lq=q.toLowerCase();
+  const hits=allUsers.filter(u=>(u.displayName||"").toLowerCase().includes(lq)||(u.jobTitle||"").toLowerCase().includes(lq)||(u.department||"").toLowerCase().includes(lq)||(u.mail||"").toLowerCase().includes(lq));
+  results.innerHTML="";
+  if(!hits.length){ results.innerHTML=`<div class="no-results">No results for "${esc(q)}"</div>`; return; }
+  hits.forEach(u=>{
+    const card=document.createElement("div"); card.className="result-card";
+    const av=document.createElement("div"); av.className="node-avatar"; av.style.cssText=`background:${aColor(u.id)};width:36px;height:36px;font-size:13px;`; av.textContent=initials(u.displayName);
+    const info=document.createElement("div");
+    info.innerHTML=`<div style="font-size:13px;font-weight:500">${esc(u.displayName)}</div><div style="font-size:11px;color:var(--muted)">${esc(u.jobTitle||"")}${u.department?" · "+esc(u.department):""}</div>`;
+    card.appendChild(av); card.appendChild(info);
+    card.addEventListener("click",function(){ openSpotlight(u.id); });
+    results.appendChild(card);
+  });
+}
+
+// ── Load data ─────────────────────────────────────────────────
+async function loadData(){
+  hide("error-box"); show("status","flex"); hide("chart-ui");
+  try{
+    setMsg("Fetching users…");
+    const users=await fetchUsers();
+    setMsg("Building org chart for "+users.length+" people…");
+    allUsers=users; roots=buildTree(users);
+    expanded=new Set();
+    function autoExp(n,d){ if(d<2&&n.reports.length){ expanded.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
+    roots.forEach(r=>autoExp(r,0));
+    g("people-count").textContent=users.length+" people";
+    hide("status"); show("chart-ui");
+    renderChart();
+    show("zoom-controls","flex"); show("minimap-wrap","flex");
+    setTimeout(()=>{ fitToScreen(); updateMinimap(); },50);
+  }catch(e){ hide("status"); showErr("Failed: "+e.message); }
+}
+
+// ── Init ──────────────────────────────────────────────────────
+async function init(){
+  const accs=msalInstance.getAllAccounts();
+  if(!accs.length) return;
+  g("user-name").textContent=accs[0].name||accs[0].username;
+  hide("auth-screen"); g("search-bar").style.display=""; show("user-info","flex");
   await loadData();
 }
 
-// ─── Boot ─────────────────────────────────────────────────────
-(async () => {
-  // Handle redirect after login
-  await msalInstance.handleRedirectPromise().catch(() => {});
+// ── Wire up events ────────────────────────────────────────────
+g("sign-in-btn").addEventListener("click",signIn);
+g("sign-out-btn").addEventListener("click",signOut);
+g("refresh-btn").addEventListener("click",loadData);
+g("expand-btn").addEventListener("click",function(){ function ea(n){ expanded.add(n.id); n.reports.forEach(ea); } roots.forEach(ea); renderChart(); });
+g("collapse-btn").addEventListener("click",function(){ expanded.clear(); roots.forEach(r=>expanded.add(r.id)); selectedId=null; hide("spotlight-overlay"); renderChart(); });
+g("zoom-in-btn").addEventListener("click",()=>setZoom(zoomLevel+10));
+g("zoom-out-btn").addEventListener("click",()=>setZoom(zoomLevel-10));
+g("zoom-slider").addEventListener("input",e=>setZoom(Number(e.target.value),true));
+g("fit-btn").addEventListener("click",fitToScreen);
+g("spotlight-close").addEventListener("click",()=>hide("spotlight-overlay"));
+g("spotlight-overlay").addEventListener("click",function(e){ if(e.target===g("spotlight-overlay")) hide("spotlight-overlay"); });
+g("chart-scroll").addEventListener("scroll",updateMinimap);
+g("chart-scroll").addEventListener("wheel",function(e){ if(e.ctrlKey||e.metaKey){ e.preventDefault(); setZoom(zoomLevel+(e.deltaY<0?10:-10)); } },{passive:false});
+let st; g("search-bar").addEventListener("input",e=>{ clearTimeout(st); st=setTimeout(()=>doSearch(e.target.value),200); });
+
+// ── Boot ──────────────────────────────────────────────────────
+(async function(){
+  await msalInstance.initialize();
+  await msalInstance.handleRedirectPromise().catch(()=>{});
   await init();
-
-  document.getElementById("sign-in-btn").addEventListener("click", signIn);
-  document.getElementById("sign-out-btn").addEventListener("click", signOut);
-  document.getElementById("refresh-btn").addEventListener("click", loadData);
-  document.getElementById("detail-close").addEventListener("click", () => {
-    hide("detail-panel");
-    selectedId = null;
-    rerenderTree();
-  });
-
-  let searchTimer;
-  document.getElementById("search-bar").addEventListener("input", e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => doSearch(e.target.value), 200);
-  });
 })();
+
+})(); // end IIFE
 </script>
 </body>
 </html>

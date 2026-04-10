@@ -650,7 +650,7 @@ function setView(v){
   });
   const isHierarchy=v==="hierarchy";
   el("chart-scroll").style.display=isHierarchy?"":"none";
-  el("dir-view").style.display=v==="dir"?"":"none";
+  el("dir-view").style.display=v==="dir"?"block":"none";
   ["expand-btn","collapse-btn","compact-btn"].forEach(id=>{
     el(id).style.display=isHierarchy?"":"none";
   });

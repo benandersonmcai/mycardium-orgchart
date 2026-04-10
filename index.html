@@ -725,6 +725,7 @@ let st; el("search-bar").addEventListener("input",e=>{ clearTimeout(st); st=setT
 
 // ── Boot ──────────────────────────────────────────────────────
 (async function(){
+  applyDark();
   await msalInstance.initialize();
   await msalInstance.handleRedirectPromise().catch(()=>{});
   const accs=msalInstance.getAllAccounts();

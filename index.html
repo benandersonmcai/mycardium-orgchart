@@ -79,6 +79,35 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
 .sp-chip{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--bg);font-size:12px;cursor:pointer}
 .sp-chip:hover{border-color:var(--blue);background:var(--blue-light)}
 .sp-chip-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;flex-shrink:0}
+/* ── View switcher ── */
+#view-switcher{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-right:8px;flex-shrink:0}
+#view-switcher button{font-size:12px;padding:6px 13px;border:none;border-right:1px solid var(--border);background:transparent;cursor:pointer;color:var(--muted);white-space:nowrap}
+#view-switcher button:last-child{border-right:none}
+#view-switcher button.active{background:var(--blue);color:#fff}
+#view-switcher button:not(.active):hover{background:var(--border)}
+/* ── Dept view ── */
+#dept-view{display:none;padding:24px 32px;overflow:auto;height:calc(100vh - 110px)}
+.dv-section{margin-bottom:32px}
+.dv-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+.dv-header-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.dv-header-name{font-size:14px;font-weight:700}
+.dv-header-count{font-size:12px;color:var(--muted);margin-left:4px}
+.dv-grid{display:flex;flex-wrap:wrap;gap:10px}
+.dv-card{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);cursor:pointer;width:240px;transition:border-color 0.15s}
+.dv-card:hover{border-color:var(--blue)}
+.dv-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
+.dv-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dv-role{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ── Directory view ── */
+#dir-view{display:none;padding:24px 32px;overflow:auto;height:calc(100vh - 110px)}
+.dir-section{margin-bottom:24px}
+.dir-letter{font-size:18px;font-weight:700;color:var(--blue);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.dir-grid{display:flex;flex-wrap:wrap;gap:10px}
+.dir-card{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);cursor:pointer;width:240px;transition:border-color 0.15s}
+.dir-card:hover{border-color:var(--blue)}
+.dir-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
+.dir-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dir-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -99,6 +128,11 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
   <div id="error-box"></div>
   <div id="chart-ui">
     <div id="toolbar">
+      <div id="view-switcher">
+        <button id="view-hierarchy" class="active">⊞ Hierarchy</button>
+        <button id="view-dept">⬛ Department</button>
+        <button id="view-dir">☰ Directory</button>
+      </div>
       <button id="refresh-btn">↺ Refresh</button>
       <button id="expand-btn">⊞ Expand all</button>
       <button id="collapse-btn">⊟ Collapse all</button>
@@ -113,6 +147,8 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
         <div id="chart-canvas"></div>
       </div>
     </div>
+    <div id="dept-view"></div>
+    <div id="dir-view"></div>
     <div id="search-results"></div>
   </div>
 </main>
@@ -159,7 +195,7 @@ function initials(n){ return (n||"?").split(" ").map(p=>p[0]).join("").toUpperCa
 function showErr(m){ el("error-box").textContent=m; show("error-box"); }
 
 // ── State ─────────────────────────────────────────────────────
-let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100, compact=false;
+let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100, compact=false, currentView="hierarchy";
 
 // ── Compact helpers ───────────────────────────────────────────
 function cw(){ return compact?COMP_W:NODE_W; }
@@ -616,10 +652,79 @@ async function loadData(){
     legend.style.display="flex";
 
     hide("status"); show("chart-ui");
-    renderChart();
-    show("zoom-controls","flex"); show("minimap-wrap","flex");
-    setTimeout(()=>{ fitToScreen(); updateMinimap(); },50);
+    setView(currentView);
+    setTimeout(()=>{ if(currentView==="hierarchy"){ fitToScreen(); updateMinimap(); } },50);
   }catch(e){ hide("status"); showErr("Failed: "+e.message); }
+}
+
+// ── View switching ────────────────────────────────────────────
+function setView(v){
+  currentView=v;
+  ["hierarchy","dept","dir"].forEach(k=>{
+    el("view-"+k).classList.toggle("active",k===v);
+  });
+  const isHierarchy=v==="hierarchy";
+  el("chart-scroll").style.display=isHierarchy?"":"none";
+  el("dept-view").style.display=v==="dept"?"":"none";
+  el("dir-view").style.display=v==="dir"?"":"none";
+  // hierarchy-only controls
+  ["expand-btn","collapse-btn","compact-btn"].forEach(id=>{
+    el(id).style.display=isHierarchy?"":"none";
+  });
+  el("zoom-controls").style.display=isHierarchy?"flex":"none";
+  el("minimap-wrap").style.display=isHierarchy?"flex":"none";
+  if(v==="hierarchy") renderChart();
+  else if(v==="dept") renderDeptView();
+  else if(v==="dir") renderDirView();
+}
+
+function mkPersonCard(u, cls){
+  const card=document.createElement("div"); card.className=cls+"-card";
+  const av=document.createElement("div"); av.className=cls+"-av";
+  av.style.background=aColor(u.id); av.textContent=initials(u.displayName);
+  const info=document.createElement("div"); info.style.overflow="hidden";
+  const name=document.createElement("div"); name.className=cls+"-name"; name.textContent=u.displayName||"";
+  const sub=document.createElement("div"); sub.className=cls+"-role"||cls+"-sub"; sub.textContent=(u.jobTitle||"")+(u.department&&cls==="dir"?" · "+u.department:"");
+  info.appendChild(name); info.appendChild(sub);
+  card.appendChild(av); card.appendChild(info);
+  card.addEventListener("click",()=>openSpotlight(u.id));
+  return card;
+}
+
+function renderDeptView(){
+  const wrap=el("dept-view"); wrap.innerHTML="";
+  const groups={};
+  allUsers.forEach(u=>{ const d=u.department||"No Department"; if(!groups[d]) groups[d]=[]; groups[d].push(u); });
+  Object.keys(groups).sort().forEach(dept=>{
+    const people=groups[dept].sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||""));
+    const dc=deptColor(dept);
+    const section=document.createElement("div"); section.className="dv-section";
+    const header=document.createElement("div"); header.className="dv-header";
+    const dot=document.createElement("div"); dot.className="dv-header-dot";
+    dot.style.background=dc?dc.text:"#6b7280";
+    const name=document.createElement("span"); name.className="dv-header-name"; name.textContent=dept;
+    const count=document.createElement("span"); count.className="dv-header-count"; count.textContent="("+people.length+")";
+    header.appendChild(dot); header.appendChild(name); header.appendChild(count);
+    const grid=document.createElement("div"); grid.className="dv-grid";
+    people.forEach(u=>grid.appendChild(mkPersonCard(u,"dv")));
+    section.appendChild(header); section.appendChild(grid);
+    wrap.appendChild(section);
+  });
+}
+
+function renderDirView(){
+  const wrap=el("dir-view"); wrap.innerHTML="";
+  const sorted=[...allUsers].sort((a,b)=>(a.displayName||"").localeCompare(b.displayName||""));
+  const groups={};
+  sorted.forEach(u=>{ const letter=(u.displayName||"?")[0].toUpperCase(); if(!groups[letter]) groups[letter]=[]; groups[letter].push(u); });
+  Object.keys(groups).sort().forEach(letter=>{
+    const section=document.createElement("div"); section.className="dir-section";
+    const heading=document.createElement("div"); heading.className="dir-letter"; heading.textContent=letter;
+    const grid=document.createElement("div"); grid.className="dir-grid";
+    groups[letter].forEach(u=>grid.appendChild(mkPersonCard(u,"dir")));
+    section.appendChild(heading); section.appendChild(grid);
+    wrap.appendChild(section);
+  });
 }
 
 // ── Events ────────────────────────────────────────────────────
@@ -723,8 +828,11 @@ el("dark-btn").addEventListener("click",function(){
   darkMode=!darkMode;
   localStorage.setItem("darkMode",darkMode?"1":"0");
   applyDark();
-  renderChart();
+  if(allUsers.length) setView(currentView);
 });
+el("view-hierarchy").addEventListener("click",()=>setView("hierarchy"));
+el("view-dept").addEventListener("click",()=>setView("dept"));
+el("view-dir").addEventListener("click",()=>setView("dir"));
 el("sign-in-btn").addEventListener("click",signIn);
 el("sign-out-btn").addEventListener("click",signOut);
 el("export-btn").addEventListener("click",exportPDF);

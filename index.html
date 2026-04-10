@@ -8,6 +8,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--blue:#185FA5;--blue-light:#E6F1FB;--text:#1a1a1a;--muted:#6b7280;--border:#e5e7eb;--bg:#f3f4f6;--card:#fff;--line:#c5ccd6;--radius:8px}
+body.dark{--blue:#4da3ff;--blue-light:#1a3a5c;--text:#f0f0f0;--muted:#9ca3af;--border:#374151;--bg:#111827;--card:#1f2937;--line:#374151}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:200;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
 .logo{width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0}
@@ -98,6 +99,7 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
       <button id="expand-btn">⊞ Expand all</button>
       <button id="collapse-btn">⊟ Collapse all</button>
       <button id="compact-btn">⊡ Compact</button>
+      <button id="dark-btn">🌙 Dark</button>
       <span id="people-count"></span>
     </div>
     <div id="dept-legend"></div>
@@ -610,7 +612,19 @@ async function loadData(){
 }
 
 // ── Events ────────────────────────────────────────────────────
-el("sign-in-btn").addEventListener("click",signIn);
+// ── Dark mode ─────────────────────────────────────────────────
+let darkMode=localStorage.getItem("darkMode")==="1";
+function applyDark(){
+  document.body.classList.toggle("dark",darkMode);
+  el("dark-btn").textContent=darkMode?"☀️ Light":"🌙 Dark";
+}
+applyDark();
+el("dark-btn").addEventListener("click",function(){
+  darkMode=!darkMode;
+  localStorage.setItem("darkMode",darkMode?"1":"0");
+  applyDark();
+  renderChart();
+});
 el("sign-out-btn").addEventListener("click",signOut);
 el("refresh-btn").addEventListener("click",loadData);
 el("expand-btn").addEventListener("click",function(){ function ea(n){ expanded.add(n.id); n.reports.forEach(ea); } roots.forEach(ea); renderChart(); });

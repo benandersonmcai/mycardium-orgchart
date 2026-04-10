@@ -169,7 +169,27 @@ function deptColor(dept){
   return deptCache[dept];
 }
 
-// ── MSAL ──────────────────────────────────────────────────────
+// ── Photo cache ───────────────────────────────────────────────
+const photoCache={};
+async function fetchPhoto(id){
+  if(photoCache[id]!==undefined) return photoCache[id];
+  try{
+    const token=await getToken();
+    const r=await fetch("https://graph.microsoft.com/v1.0/users/"+id+"/photo/$value",{headers:{Authorization:"Bearer "+token}});
+    if(!r.ok){ photoCache[id]=null; return null; }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    photoCache[id]=url;
+    return url;
+  }catch(e){ photoCache[id]=null; return null; }
+}
+async function preloadPhotos(users){
+  // fetch in batches of 10
+  const chunks=[]; for(let i=0;i<users.length;i+=10) chunks.push(users.slice(i,i+10));
+  for(const chunk of chunks){
+    await Promise.all(chunk.map(u=>fetchPhoto(u.id)));
+  }
+}
 const msalInstance=new msal.PublicClientApplication({
   auth:{clientId:CLIENT_ID,authority:AUTHORITY,redirectUri:REDIRECT_URI,navigateToLoginRequestUrl:true},
   cache:{cacheLocation:"localStorage"}
@@ -278,8 +298,17 @@ function renderChart(){
     avatar.style.width=(compact?26:34)+"px";
     avatar.style.height=(compact?26:34)+"px";
     avatar.style.fontSize=(compact?9:12)+"px";
-    avatar.style.background=dc?dc.text:aColor(node.id);
-    avatar.textContent=initials(node.displayName);
+    avatar.style.flexShrink="0";
+    const photo=photoCache[node.id];
+    if(photo){
+      avatar.style.backgroundImage="url("+photo+")";
+      avatar.style.backgroundSize="cover";
+      avatar.style.backgroundPosition="center";
+      avatar.style.background=dc?dc.text:aColor(node.id);
+    } else {
+      avatar.style.background=dc?dc.text:aColor(node.id);
+      avatar.textContent=initials(node.displayName);
+    }
     card.appendChild(avatar);
 
     // Text container
@@ -361,8 +390,16 @@ function openSpotlight(id){
   }
 
   const av=mkEl("div","sp-avatar");
-  av.style.background=aColor(u.id);
-  av.textContent=initials(u.displayName);
+  const spPhoto=photoCache[u.id];
+  if(spPhoto){
+    av.style.backgroundImage="url("+spPhoto+")";
+    av.style.backgroundSize="cover";
+    av.style.backgroundPosition="center";
+    av.style.background=aColor(u.id);
+  } else {
+    av.style.background=aColor(u.id);
+    av.textContent=initials(u.displayName);
+  }
   sc.appendChild(av);
   sc.appendChild(mkEl("div","sp-name",u.displayName));
   sc.appendChild(mkEl("div","sp-role",u.jobTitle||""));
@@ -542,6 +579,8 @@ async function loadData(){
     const users=await fetchUsers();
     el("status-msg").textContent="Building org chart for "+users.length+" people…";
     allUsers=users; roots=buildTree(users);
+    el("status-msg").textContent="Loading profile photos…";
+    await preloadPhotos(users);
     expanded=new Set();
     function autoExp(n,d){ if(d<2&&n.reports.length){ expanded.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
     roots.forEach(r=>autoExp(r,0));

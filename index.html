@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>MyCardium AI — Org Chart</title>
 <script src="https://unpkg.com/@azure/msal-browser@3.28.0/lib/msal-browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--blue:#185FA5;--blue-light:#E6F1FB;--text:#1a1a1a;--muted:#6b7280;--border:#e5e7eb;--bg:#f3f4f6;--card:#fff;--line:#c5ccd6;--radius:8px}
@@ -626,74 +624,69 @@ async function loadData(){
 
 // ── Events ────────────────────────────────────────────────────
 // ── Export PDF ────────────────────────────────────────────────
-async function exportPDF(){
-  if(typeof html2canvas==="undefined"||typeof window.jspdf==="undefined"){
-    showErr("Export libraries not loaded. Please check your internet connection and try refreshing.");
-    return;
-  }
+function exportPDF(){
   const btn=el("export-btn");
-  btn.textContent="⏳ Generating…";
+  btn.textContent="⏳ Preparing…";
   btn.disabled=true;
 
-  try{
-    const canvas=el("chart-canvas");
-    const wrap=el("chart-wrap");
+  // Save current state
+  const prevZoom=zoomLevel;
+  const prevScroll={left:el("chart-scroll").scrollLeft,top:el("chart-scroll").scrollTop};
 
-    // Temporarily reset zoom for capture
-    const prevZoom=zoomLevel;
-    wrap.style.transform="scale(1)";
+  // Reset zoom to 100% for print
+  el("chart-wrap").style.transform="scale(1)";
 
-    const shot=await html2canvas(canvas,{
-      backgroundColor:darkMode?"#111827":"#f3f4f6",
-      scale:1.5,
-      useCORS:true,
-      allowTaint:true,
-      logging:false
-    });
+  // Add print styles dynamically
+  const style=document.createElement("style");
+  style.id="print-style";
+  style.textContent=`
+    @media print {
+      @page { size: A3 landscape; margin: 10mm; }
+      header, #toolbar, #dept-legend, #zoom-controls, #minimap-wrap, #search-bar, #user-info, #search-results { display: none !important; }
+      body { background: white !important; }
+      #chart-ui { display: block !important; }
+      #chart-scroll { overflow: visible !important; height: auto !important; padding: 0 !important; cursor: default !important; }
+      #chart-wrap { transform: none !important; }
+      #print-header { display: flex !important; }
+    }
+    #print-header {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 0 0 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 16px;
+    }
+    #print-header img { height: 40px; width: 40px; object-fit: contain; }
+    #print-header h2 { font-size: 18px; font-weight: 700; color: #185FA5; }
+    #print-header span { font-size: 12px; color: #6b7280; margin-left: auto; }
+  `;
+  document.head.appendChild(style);
 
-    // Restore zoom
-    wrap.style.transform="scale("+prevZoom/100+")";
+  // Add print header
+  const printHeader=document.createElement("div");
+  printHeader.id="print-header";
+  printHeader.innerHTML=`
+    <img src="logo.png" onerror="this.style.display='none'"/>
+    <h2>MyCardium AI — Org Chart</h2>
+    <span>Generated ${new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</span>
+  `;
+  el("chart-ui").insertBefore(printHeader,el("chart-ui").firstChild);
 
-    const imgData=shot.toDataURL("image/png");
-    const {jsPDF}=window.jspdf;
+  setTimeout(()=>{
+    window.print();
 
-    // Landscape A3 for wide org charts
-    const pdf=new jsPDF({orientation:"landscape",unit:"mm",format:"a3"});
-    const pdfW=pdf.internal.pageSize.getWidth();
-    const pdfH=pdf.internal.pageSize.getHeight();
-
-    // Scale image to fit page with margins
-    const margin=10;
-    const imgW=shot.width, imgH=shot.height;
-    const ratio=Math.min((pdfW-margin*2)/imgW,(pdfH-margin*2)/imgH);
-    const drawW=imgW*ratio, drawH=imgH*ratio;
-    const offsetX=(pdfW-drawW)/2, offsetY=(pdfH-drawH)/2;
-
-    // Header with logo
-    try{
-      const logoImg=new Image(); logoImg.crossOrigin="anonymous";
-      await new Promise((res,rej)=>{ logoImg.onload=res; logoImg.onerror=rej; logoImg.src="logo.png"; });
-      const logoCanvas=document.createElement("canvas");
-      logoCanvas.width=logoImg.width; logoCanvas.height=logoImg.height;
-      logoCanvas.getContext("2d").drawImage(logoImg,0,0);
-      pdf.addImage(logoCanvas.toDataURL("image/png"),"PNG",margin,3,10,10);
-    }catch(e){}
-    pdf.setFontSize(14);
-    pdf.setTextColor(darkMode?200:30);
-    pdf.text("MyCardium AI — Org Chart",pdfW/2,8,{align:"center"});
-    pdf.setFontSize(8);
-    pdf.setTextColor(120);
-    pdf.text("Generated "+new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}),pdfW/2,13,{align:"center"});
-
-    pdf.addImage(imgData,"PNG",offsetX,offsetY+6,drawW,drawH);
-    pdf.save("mycardium-orgchart.pdf");
-
-  }catch(e){
-    showErr("Export failed: "+e.message);
-  }finally{
-    btn.textContent="⬇ Export PDF";
-    btn.disabled=false;
-  }
+    // Restore everything after print dialog closes
+    setTimeout(()=>{
+      document.getElementById("print-style")?.remove();
+      document.getElementById("print-header")?.remove();
+      el("chart-wrap").style.transform="scale("+prevZoom/100+")";
+      el("chart-scroll").scrollLeft=prevScroll.left;
+      el("chart-scroll").scrollTop=prevScroll.top;
+      btn.textContent="⬇ Export PDF";
+      btn.disabled=false;
+    },1000);
+  },300);
 }
 let darkMode=localStorage.getItem("darkMode")==="1";
 function applyDark(){

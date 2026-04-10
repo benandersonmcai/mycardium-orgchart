@@ -709,7 +709,13 @@ async function exportPDF(){
     // Reset zoom to 100% so we capture at true size
     const prevTransform=el("chart-wrap").style.transform;
     el("chart-wrap").style.transform="scale(1)";
-    await new Promise(r=>setTimeout(r,200));
+
+    // Freeze all animations so no cards are mid-fade when captured
+    const freezeStyle=document.createElement("style");
+    freezeStyle.id="pdf-freeze";
+    freezeStyle.textContent="*{animation:none!important;transition:none!important;opacity:1!important;}";
+    document.head.appendChild(freezeStyle);
+    await new Promise(r=>setTimeout(r,50));
 
     btn.textContent="⏳ Rendering…";
     const chartCanvas=el("chart-canvas");
@@ -722,6 +728,8 @@ async function exportPDF(){
       height:chartCanvas.scrollHeight
     });
 
+    // Restore animations
+    document.getElementById("pdf-freeze")?.remove();
     el("chart-wrap").style.transform=prevTransform;
 
     const {jsPDF}=window.jspdf;

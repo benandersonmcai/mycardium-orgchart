@@ -523,19 +523,21 @@ async function loadData(){
 
     // build legend
     const depts=[...new Set(users.map(u=>u.department).filter(Boolean))].sort();
-    const legend=g("dept-legend");
-    legend.innerHTML="";
-    depts.forEach(dept=>{
-      const dc=getDeptColor(dept);
-      const chip=document.createElement("div");
-      chip.style.cssText=`display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;background:${dc.bg};border:1px solid ${dc.border};color:${dc.text};`;
-      const dot=document.createElement("div");
-      dot.style.cssText=`width:8px;height:8px;border-radius:50%;background:${dc.text};flex-shrink:0;`;
-      chip.appendChild(dot);
-      chip.appendChild(document.createTextNode(dept));
-      legend.appendChild(chip);
-    });
-    legend.style.display="flex";
+    const legend=document.getElementById("dept-legend");
+    if(legend){
+      legend.innerHTML="";
+      depts.forEach(dept=>{
+        const dc=getDeptColor(dept);
+        const chip=document.createElement("div");
+        chip.style.cssText=`display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;background:${dc.bg};border:1px solid ${dc.border};color:${dc.text};`;
+        const dot=document.createElement("div");
+        dot.style.cssText=`width:8px;height:8px;border-radius:50%;background:${dc.text};flex-shrink:0;`;
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(dept));
+        legend.appendChild(chip);
+      });
+      legend.style.display="flex";
+    }
     hide("status"); show("chart-ui");
     renderChart();
     show("zoom-controls","flex"); show("minimap-wrap","flex");

@@ -404,29 +404,31 @@ function fitToScreen(){
 function updateMinimap(){
   const canvas=g("chart-canvas"), scroll=g("chart-scroll");
   const mc=g("minimap-draw"), vp=g("minimap-viewport");
-  const cw=canvas.offsetWidth||1, ch=canvas.offsetHeight||1;
-  const scale=Math.min(MM_W/cw,MM_H/ch);
-  const dw=cw*scale, dh=ch*scale;
+  const scaledCanvasW = (canvas.offsetWidth||1) * (zoomLevel/100);
+  const scaledCanvasH = (canvas.offsetHeight||1) * (zoomLevel/100);
+  const scale = Math.min(MM_W/scaledCanvasW, MM_H/scaledCanvasH);
+  const dw = scaledCanvasW * scale, dh = scaledCanvasH * scale;
   mc.width=MM_W; mc.height=MM_H;
   const ctx=mc.getContext("2d");
   ctx.clearRect(0,0,MM_W,MM_H);
   ctx.fillStyle="#f3f4f6"; ctx.fillRect(0,0,MM_W,MM_H);
   const ox=(MM_W-dw)/2, oy=(MM_H-dh)/2;
+  const nodeScale = scale * (zoomLevel/100);
   canvas.querySelectorAll(".node-card").forEach(card=>{
     const x=parseFloat(card.style.left)||0, y=parseFloat(card.style.top)||0;
     ctx.fillStyle=card.classList.contains("selected")?"#185FA5":card.classList.contains("root-node")?"#bfd6f0":"#fff";
     ctx.strokeStyle=card.classList.contains("root-node")||card.classList.contains("selected")?"#185FA5":"#d1d5db";
     ctx.lineWidth=0.5;
-    ctx.beginPath(); ctx.roundRect(ox+x*scale,oy+y*scale,NODE_W*scale,NODE_H*scale,2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(ox+x*nodeScale,oy+y*nodeScale,NODE_W*nodeScale,NODE_H*nodeScale,2); ctx.fill(); ctx.stroke();
   });
   ctx.strokeStyle="#c5ccd6"; ctx.lineWidth=0.5;
   canvas.querySelectorAll("svg.lines line").forEach(l=>{
     ctx.beginPath();
-    ctx.moveTo(ox+parseFloat(l.getAttribute("x1"))*scale,oy+parseFloat(l.getAttribute("y1"))*scale);
-    ctx.lineTo(ox+parseFloat(l.getAttribute("x2"))*scale,oy+parseFloat(l.getAttribute("y2"))*scale);
+    ctx.moveTo(ox+parseFloat(l.getAttribute("x1"))*nodeScale,oy+parseFloat(l.getAttribute("y1"))*nodeScale);
+    ctx.lineTo(ox+parseFloat(l.getAttribute("x2"))*nodeScale,oy+parseFloat(l.getAttribute("y2"))*nodeScale);
     ctx.stroke();
   });
-  const visW=scroll.clientWidth/(zoomLevel/100), visH=scroll.clientHeight/(zoomLevel/100);
+  const visW=scroll.clientWidth, visH=scroll.clientHeight;
   vp.style.left=(ox+scroll.scrollLeft*scale)+"px";
   vp.style.top=(oy+scroll.scrollTop*scale)+"px";
   vp.style.width=Math.min(visW*scale,dw)+"px";
@@ -438,14 +440,15 @@ function updateMinimap(){
   const mm=g("minimap-canvas"); let drag=false;
   function mmScroll(e){
     const canvas=g("chart-canvas"),scroll=g("chart-scroll");
-    const cw=canvas.offsetWidth||1,ch=canvas.offsetHeight||1;
-    const scale=Math.min(MM_W/cw,MM_H/ch);
-    const ox=(MM_W-cw*scale)/2,oy=(MM_H-ch*scale)/2;
+    const scaledW=(canvas.offsetWidth||1)*(zoomLevel/100);
+    const scaledH=(canvas.offsetHeight||1)*(zoomLevel/100);
+    const scale=Math.min(MM_W/scaledW,MM_H/scaledH);
+    const ox=(MM_W-scaledW*scale)/2,oy=(MM_H-scaledH*scale)/2;
     const rect=mm.getBoundingClientRect();
     const cx=e.touches?e.touches[0].clientX:e.clientX;
     const cy=e.touches?e.touches[0].clientY:e.clientY;
-    scroll.scrollLeft=((cx-rect.left-ox)/scale)*(zoomLevel/100)-scroll.clientWidth/2;
-    scroll.scrollTop=((cy-rect.top-oy)/scale)*(zoomLevel/100)-scroll.clientHeight/2;
+    scroll.scrollLeft=((cx-rect.left-ox)/scale)-scroll.clientWidth/2;
+    scroll.scrollTop=((cy-rect.top-oy)/scale)-scroll.clientHeight/2;
     updateMinimap();
   }
   mm.addEventListener("mousedown",e=>{drag=true;mmScroll(e);e.preventDefault();});

@@ -31,7 +31,7 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
 #toolbar button:hover{background:var(--bg);color:var(--text)}
 #people-count{font-size:12px;color:var(--muted);margin-left:auto}
 #dept-legend{padding:0 24px 12px;display:none;flex-wrap:wrap;gap:8px}
-#chart-scroll{overflow:auto;padding:32px 40px 60px;cursor:grab;user-select:none}
+#chart-scroll{overflow:auto;padding:32px 40px 60px;cursor:grab;user-select:none;height:calc(100vh - 110px)}
 #chart-scroll:active{cursor:grabbing}
 #chart-wrap{transform-origin:top left;transition:transform 0.15s ease}
 #chart-canvas{position:relative;display:inline-block}
@@ -421,8 +421,17 @@ function fitToScreen(){
   const scroll=el("chart-scroll"),canvas=el("chart-canvas");
   const scW=scroll.clientWidth-80,scH=scroll.clientHeight-80;
   const cnW=canvas.offsetWidth||1,cnH=canvas.offsetHeight||1;
-  setZoom(Math.min(150,Math.max(20,Math.floor(Math.min(scW/cnW,scH/cnH)*100))));
-  scroll.scrollTo(0,0);
+  const newZoom=Math.min(150,Math.max(20,Math.floor(Math.min(scW/cnW,scH/cnH)*100)));
+  zoomLevel=newZoom;
+  el("chart-wrap").style.transform="scale("+zoomLevel/100+")";
+  el("zoom-label").textContent=zoomLevel+"%";
+  el("zoom-slider").value=zoomLevel;
+  // Centre the content
+  const scaledW=cnW*(zoomLevel/100);
+  const scaledH=cnH*(zoomLevel/100);
+  scroll.scrollLeft=Math.max(0,(scaledW-scroll.clientWidth)/2);
+  scroll.scrollTop=Math.max(0,(scaledH-scroll.clientHeight)/2);
+  setTimeout(updateMinimap,50);
 }
 
 // ── Minimap ───────────────────────────────────────────────────

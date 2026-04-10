@@ -278,22 +278,22 @@ function renderChart(){
     av.style.cssText=`background:${dc?dc.text:aColor(node.id)};${compactMode?"width:26px;height:26px;font-size:9px;":""}`;
     av.textContent=initials(node.displayName);
 
-    const tx2=document.createElement("div");
-    tx2.className="node-text";
+    const textDiv=document.createElement("div");
+    textDiv.className="node-text";
     const nm=document.createElement("div");
     nm.className="node-name";
     nm.style.cssText=`${dc?"color:"+dc.text+";":""}${compactMode?"font-size:11px;":""}`;
     nm.textContent=node.displayName;
-    tx2.appendChild(nm);
+    textDiv.appendChild(nm);
 
     if(!compactMode){
       const tl=document.createElement("div");
       tl.className="node-title";
       tl.textContent=node.jobTitle||node.department||"—";
-      tx2.appendChild(tl);
+      textDiv.appendChild(tl);
     }
 
-    card.appendChild(av); card.appendChild(tx2);
+    card.appendChild(av); card.appendChild(textDiv);
     const tl=document.createElement("div");
     tl.className="node-title";
     tl.textContent=node.jobTitle||node.department||"—";

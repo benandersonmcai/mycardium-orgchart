@@ -153,6 +153,10 @@ function setMsg(m){ g("status-msg").textContent=m; }
 
 // ── State ─────────────────────────────────────────────────────
 let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100, compactMode=false;
+function NW(){ return compactMode?120:NODE_W; }
+function NH(){ return compactMode?44:NODE_H; }
+function HG(){ return compactMode?16:H_GAP; }
+function VG(){ return compactMode?50:V_GAP; }
 
 // ── MSAL ──────────────────────────────────────────────────────
 const msalInstance = new msal.PublicClientApplication({
@@ -526,6 +530,7 @@ async function loadData(){
     const legend=document.getElementById("dept-legend");
     if(legend){
       legend.innerHTML="";
+      legend.style.cssText="padding:0 24px 12px;display:flex;flex-wrap:wrap;gap:8px;";
       depts.forEach(dept=>{
         const dc=getDeptColor(dept);
         const chip=document.createElement("div");

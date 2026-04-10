@@ -627,6 +627,10 @@ async function loadData(){
 // ── Events ────────────────────────────────────────────────────
 // ── Export PDF ────────────────────────────────────────────────
 async function exportPDF(){
+  if(typeof html2canvas==="undefined"||typeof window.jspdf==="undefined"){
+    showErr("Export libraries not loaded. Please check your internet connection and try refreshing.");
+    return;
+  }
   const btn=el("export-btn");
   btn.textContent="⏳ Generating…";
   btn.disabled=true;

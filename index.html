@@ -106,6 +106,7 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
       <button id="collapse-btn">⊟ Collapse all</button>
       <span id="people-count"></span>
     </div>
+    <div id="dept-legend" style="display:none;padding:0 24px 12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
     <div id="chart-scroll"><div id="chart-wrap"><div id="chart-canvas"></div></div></div>
     <div id="search-results"></div>
   </div>
@@ -201,7 +202,23 @@ function buildTree(users){
   return r;
 }
 
-// ── Layout ────────────────────────────────────────────────────
+// ── Department colours ────────────────────────────────────────
+const DEPT_COLORS = {
+  bg: ["#EEF4FF","#F0FDF4","#FFF7ED","#FDF4FF","#FFFBEB","#F0F9FF","#FFF1F2","#F0FDFA"],
+  border: ["#93C5FD","#86EFAC","#FCD34D","#E879F9","#FCA5A5","#7DD3FC","#FDA4AF","#5EEAD4"],
+  text: ["#1E40AF","#166534","#92400E","#7E22CE","#991B1B","#0369A1","#9F1239","#0F766E"]
+};
+const deptColorCache={};
+let deptColorIdx=0;
+function getDeptColor(dept){
+  if(!dept) return null;
+  if(!deptColorCache[dept]){
+    const i=deptColorIdx%DEPT_COLORS.bg.length;
+    deptColorCache[dept]={ bg:DEPT_COLORS.bg[i], border:DEPT_COLORS.border[i], text:DEPT_COLORS.text[i] };
+    deptColorIdx++;
+  }
+  return deptColorCache[dept];
+}
 function subW(node){ if(!node.reports.length||!expanded.has(node.id)) return NODE_W; return Math.max(NODE_W,node.reports.reduce((s,c)=>s+subW(c),0)+H_GAP*(node.reports.length-1)); }
 function assignPos(node,ox,oy,pos){
   const sw=subW(node);
@@ -249,18 +266,20 @@ function renderChart(){
   function mkNode(node){
     const p=pos[node.id]; if(!p) return;
     const card=document.createElement("div");
+    const dc=getDeptColor(node.department);
     card.className="node-card"+(selectedId===node.id?" selected":"")+(!node.managerId?" root-node":"");
-    card.style.cssText=`left:${p.x}px;top:${p.y}px;`;
+    card.style.cssText=`left:${p.x}px;top:${p.y}px;${dc?`background:${dc.bg};border-color:${dc.border};`:""}`;
 
     const av=document.createElement("div");
     av.className="node-avatar";
-    av.style.background=aColor(node.id);
+    av.style.background=dc?dc.text:aColor(node.id);
     av.textContent=initials(node.displayName);
 
     const tx=document.createElement("div");
     tx.className="node-text";
     const nm=document.createElement("div");
     nm.className="node-name";
+    nm.style.color=dc?dc.text:"";
     nm.textContent=node.displayName;
     const tl=document.createElement("div");
     tl.className="node-title";
@@ -492,6 +511,22 @@ async function loadData(){
     function autoExp(n,d){ if(d<2&&n.reports.length){ expanded.add(n.id); n.reports.forEach(c=>autoExp(c,d+1)); } }
     roots.forEach(r=>autoExp(r,0));
     g("people-count").textContent=users.length+" people";
+
+    // build legend
+    const depts=[...new Set(users.map(u=>u.department).filter(Boolean))].sort();
+    const legend=g("dept-legend");
+    legend.innerHTML="";
+    depts.forEach(dept=>{
+      const dc=getDeptColor(dept);
+      const chip=document.createElement("div");
+      chip.style.cssText=`display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;background:${dc.bg};border:1px solid ${dc.border};color:${dc.text};`;
+      const dot=document.createElement("div");
+      dot.style.cssText=`width:8px;height:8px;border-radius:50%;background:${dc.text};flex-shrink:0;`;
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(dept));
+      legend.appendChild(chip);
+    });
+    legend.style.display="flex";
     hide("status"); show("chart-ui");
     renderChart();
     show("zoom-controls","flex"); show("minimap-wrap","flex");

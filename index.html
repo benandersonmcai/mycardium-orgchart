@@ -117,6 +117,7 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
     <div id="toolbar">
       <div id="view-switcher">
         <button id="view-hierarchy" class="active">⊞ Hierarchy</button>
+        <button id="view-radial">◎ Circular</button>
         <button id="view-dir">☰ Directory</button>
       </div>
       <button id="refresh-btn">↺ Refresh</button>
@@ -638,25 +639,26 @@ async function loadData(){
 
     hide("status"); show("chart-ui");
     setView(currentView);
-    setTimeout(()=>{ if(currentView==="hierarchy"){ fitToScreen(); updateMinimap(); } },50);
+    setTimeout(()=>{ if(currentView==="hierarchy"||currentView==="radial"){ fitToScreen(); updateMinimap(); } },50);
   }catch(e){ hide("status"); showErr("Failed: "+e.message); }
 }
 
 // ── View switching ────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ["hierarchy","dir"].forEach(k=>{
+  ["hierarchy","radial","dir"].forEach(k=>{
     el("view-"+k).classList.toggle("active",k===v);
   });
-  const isHierarchy=v==="hierarchy";
-  el("chart-scroll").style.display=isHierarchy?"":"none";
+  const usesCanvas=v==="hierarchy"||v==="radial";
+  el("chart-scroll").style.display=usesCanvas?"":"none";
   el("dir-view").style.display=v==="dir"?"block":"none";
   ["expand-btn","collapse-btn","compact-btn"].forEach(id=>{
-    el(id).style.display=isHierarchy?"":"none";
+    el(id).style.display=v==="hierarchy"?"":"none";
   });
-  el("zoom-controls").style.display=isHierarchy?"flex":"none";
-  el("minimap-wrap").style.display=isHierarchy?"flex":"none";
+  el("zoom-controls").style.display=usesCanvas?"flex":"none";
+  el("minimap-wrap").style.display=usesCanvas?"flex":"none";
   if(v==="hierarchy") renderChart();
+  else if(v==="radial") renderRadialView();
   else if(v==="dir") renderDirView();
 }
 
@@ -684,6 +686,124 @@ function renderDirView(){
     section.appendChild(heading); section.appendChild(grid);
     wrap.appendChild(section);
   });
+}
+
+// ── Radial view ───────────────────────────────────────────────
+function renderRadialView(){
+  const canvas=el("chart-canvas");
+  canvas.innerHTML="";
+  const NW=compact?COMP_W:NODE_W, NH=compact?COMP_H:NODE_H;
+  const RING=NH+80; // px between rings
+
+  // Always fully expand for radial
+  function countLeaves(node){
+    if(!node.reports.length) return 1;
+    return node.reports.reduce((s,c)=>s+countLeaves(c),0);
+  }
+
+  const pos={};
+  function assignRadial(node,aStart,aEnd,r){
+    const a=(aStart+aEnd)/2;
+    pos[node.id]={x:r*Math.cos(a),y:r*Math.sin(a),a,r};
+    if(node.reports.length){
+      const total=countLeaves(node);
+      let ca=aStart;
+      node.reports.forEach(child=>{
+        const leaves=countLeaves(child);
+        const spread=(leaves/total)*(aEnd-aStart);
+        assignRadial(child,ca,ca+spread,r+RING);
+        ca+=spread;
+      });
+    }
+  }
+
+  if(roots.length===1){
+    // Root at centre, children fan full circle
+    pos[roots[0].id]={x:0,y:0,a:0,r:0};
+    if(roots[0].reports.length){
+      const total=countLeaves(roots[0]);
+      let ca=-Math.PI;
+      roots[0].reports.forEach(child=>{
+        const leaves=countLeaves(child);
+        const spread=(leaves/total)*2*Math.PI;
+        assignRadial(child,ca,ca+spread,RING);
+        ca+=spread;
+      });
+    }
+  } else {
+    const total=roots.reduce((s,r)=>s+countLeaves(r),0);
+    let ca=-Math.PI;
+    roots.forEach(root=>{
+      const leaves=countLeaves(root);
+      const spread=(leaves/total)*2*Math.PI;
+      assignRadial(root,ca,ca+spread,RING*0.5);
+      ca+=spread;
+    });
+  }
+
+  // Bounding box → offset so all coords are positive
+  const allPos=Object.values(pos);
+  const minX=Math.min(...allPos.map(p=>p.x))-NW/2-40;
+  const minY=Math.min(...allPos.map(p=>p.y))-NH/2-40;
+  const maxX=Math.max(...allPos.map(p=>p.x))+NW/2+40;
+  const maxY=Math.max(...allPos.map(p=>p.y))+NH/2+40;
+  const ox=-minX, oy=-minY;
+  canvas.style.width=(maxX-minX)+"px";
+  canvas.style.height=(maxY-minY)+"px";
+
+  // SVG curved lines
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.classList.add("lines");
+  svg.setAttribute("width",maxX-minX);
+  svg.setAttribute("height",maxY-minY);
+  canvas.appendChild(svg);
+
+  function drawLines(node){
+    const p=pos[node.id]; if(!p) return;
+    node.reports.forEach(child=>{
+      const cp=pos[child.id]; if(!cp) return;
+      const x1=ox+p.x, y1=oy+p.y, x2=ox+cp.x, y2=oy+cp.y;
+      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d","M"+x1+","+y1+" Q"+mx+","+my+" "+x2+","+y2);
+      path.setAttribute("stroke","var(--line)");
+      path.setAttribute("stroke-width","1.5");
+      path.setAttribute("fill","none");
+      svg.appendChild(path);
+      drawLines(child);
+    });
+  }
+  roots.forEach(r=>drawLines(r));
+
+  // Node cards
+  function drawNode(node){
+    const p=pos[node.id]; if(!p) return;
+    const x=ox+p.x-NW/2, y=oy+p.y-NH/2;
+    const isRoot=p.r===0||(roots.length>1&&roots.some(r=>r.id===node.id));
+    const card=document.createElement("div");
+    card.className="node-card"+(isRoot?" root-node":"");
+    card.dataset.nid=node.id;
+    card.style.cssText="left:"+x+"px;top:"+y+"px;width:"+NW+"px;min-height:"+NH+"px;padding:"+(compact?"6px 8px":"10px 12px")+";gap:"+(compact?"6px":"10px")+";";
+    const avS=compact?26:36;
+    const av=document.createElement("div"); av.className="node-avatar";
+    av.style.cssText="width:"+avS+"px;height:"+avS+"px;font-size:"+(compact?9:12)+"px;background:"+aColor(node.id)+";flex-shrink:0;";
+    av.textContent=initials(node.displayName);
+    const txt=document.createElement("div"); txt.className="node-text";
+    const nm=document.createElement("div"); nm.className="node-name";
+    nm.style.fontSize=(compact?"9px":"12px"); nm.textContent=node.displayName||"";
+    txt.appendChild(nm);
+    if(!compact){
+      const tl=document.createElement("div"); tl.className="node-title";
+      tl.style.fontSize="10px"; tl.textContent=node.jobTitle||"";
+      txt.appendChild(tl);
+    }
+    card.appendChild(av); card.appendChild(txt);
+    card.addEventListener("click",()=>openSpotlight(node.id));
+    canvas.appendChild(card);
+    node.reports.forEach(drawNode);
+  }
+  roots.forEach(drawNode);
+  setTimeout(()=>{ fitToScreen(); updateMinimap(); },50);
 }
 
 // ── Events ────────────────────────────────────────────────────
@@ -790,6 +910,7 @@ el("dark-btn").addEventListener("click",function(){
   if(allUsers.length) setView(currentView);
 });
 el("view-hierarchy").addEventListener("click",()=>setView("hierarchy"));
+el("view-radial").addEventListener("click",()=>setView("radial"));
 el("view-dir").addEventListener("click",()=>setView("dir"));
 el("sign-in-btn").addEventListener("click",signIn);
 el("sign-out-btn").addEventListener("click",signOut);

@@ -624,69 +624,94 @@ async function loadData(){
 
 // ── Events ────────────────────────────────────────────────────
 // ── Export PDF ────────────────────────────────────────────────
-function exportPDF(){
+async function exportPDF(){
   const btn=el("export-btn");
   btn.textContent="⏳ Preparing…";
   btn.disabled=true;
 
-  // Save current state
-  const prevZoom=zoomLevel;
-  const prevScroll={left:el("chart-scroll").scrollLeft,top:el("chart-scroll").scrollTop};
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      if(document.querySelector('script[src="'+src+'"]')){ resolve(); return; }
+      const s=document.createElement("script"); s.src=src; s.onload=resolve; s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
 
-  // Reset zoom to 100% for print
-  el("chart-wrap").style.transform="scale(1)";
+  try{
+    btn.textContent="⏳ Loading libraries…";
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
 
-  // Add print styles dynamically
-  const style=document.createElement("style");
-  style.id="print-style";
-  style.textContent=`
-    @media print {
-      @page { size: A3 landscape; margin: 10mm; }
-      header, #toolbar, #dept-legend, #zoom-controls, #minimap-wrap, #search-bar, #user-info, #search-results { display: none !important; }
-      body { background: white !important; }
-      #chart-ui { display: block !important; }
-      #chart-scroll { overflow: visible !important; height: auto !important; padding: 0 !important; cursor: default !important; }
-      #chart-wrap { transform: none !important; }
-      #print-header { display: flex !important; }
+    // Reset zoom so we capture at 100%
+    const prevTransform=el("chart-wrap").style.transform;
+    el("chart-wrap").style.transform="scale(1)";
+    await new Promise(r=>setTimeout(r,300));
+
+    btn.textContent="⏳ Rendering chart…";
+    const chartCanvas=el("chart-canvas");
+    const captured=await html2canvas(chartCanvas,{
+      backgroundColor:"#ffffff",
+      scale:2,
+      useCORS:true,
+      logging:false,
+      width:chartCanvas.scrollWidth,
+      height:chartCanvas.scrollHeight
+    });
+
+    // Restore zoom
+    el("chart-wrap").style.transform=prevTransform;
+
+    const {jsPDF}=window.jspdf;
+
+    // A3 landscape printable area in mm (420×297 minus 10mm margins)
+    const pageW=420, pageH=297, margin=10;
+    const printW=pageW-margin*2, printH=pageH-margin*2-8; // -8 for footer
+
+    // Logical pixel dimensions (captured at scale:2)
+    const imgWpx=captured.width/2, imgHpx=captured.height/2;
+    const PX_TO_MM=25.4/96;
+    const imgWmm=imgWpx*PX_TO_MM, imgHmm=imgHpx*PX_TO_MM;
+
+    // Scale so height fits the page; tile horizontally if wider than one page
+    const scaleH=printH/imgHmm;
+    const scaledWmm=imgWmm*scaleH, scaledHmm=printH;
+    const pages=Math.ceil(scaledWmm/printW);
+
+    const dateStr=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+    const pdf=new jsPDF({orientation:"landscape",unit:"mm",format:"a3"});
+
+    const sliceWpx=(printW/scaledWmm)*captured.width; // source pixels per page slice
+    const tmp=document.createElement("canvas");
+    tmp.height=captured.height;
+
+    for(let i=0;i<pages;i++){
+      if(i>0) pdf.addPage("a3","landscape");
+
+      // Slice the captured canvas for this page
+      const srcX=Math.round(i*sliceWpx);
+      const srcW=Math.min(Math.round(sliceWpx), captured.width-srcX);
+      tmp.width=srcW;
+      const ctx=tmp.getContext("2d");
+      ctx.clearRect(0,0,srcW,captured.height);
+      ctx.drawImage(captured,srcX,0,srcW,captured.height,0,0,srcW,captured.height);
+
+      const sliceRenderedW=(srcW/captured.width)*scaledWmm;
+      pdf.addImage(tmp.toDataURL("image/jpeg",0.92),"JPEG",margin,margin,sliceRenderedW,scaledHmm);
+
+      // Footer
+      pdf.setFontSize(8); pdf.setTextColor(107,114,128);
+      pdf.text("MyCardium AI — Org Chart    "+dateStr,margin,pageH-margin+4);
+      if(pages>1) pdf.text("Page "+(i+1)+" of "+pages,pageW-margin,pageH-margin+4,{align:"right"});
     }
-    #print-header {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      padding: 0 0 12px 0;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 16px;
-    }
-    #print-header img { height: 40px; width: 40px; object-fit: contain; }
-    #print-header h2 { font-size: 18px; font-weight: 700; color: #185FA5; }
-    #print-header span { font-size: 12px; color: #6b7280; margin-left: auto; }
-  `;
-  document.head.appendChild(style);
 
-  // Add print header
-  const printHeader=document.createElement("div");
-  printHeader.id="print-header";
-  printHeader.innerHTML=`
-    <img src="logo.png" onerror="this.style.display='none'"/>
-    <h2>MyCardium AI — Org Chart</h2>
-    <span>Generated ${new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</span>
-  `;
-  el("chart-ui").insertBefore(printHeader,el("chart-ui").firstChild);
+    pdf.save("mycardium-orgchart.pdf");
 
-  setTimeout(()=>{
-    window.print();
+  }catch(e){
+    showErr("PDF export failed: "+e.message);
+  }
 
-    // Restore everything after print dialog closes
-    setTimeout(()=>{
-      document.getElementById("print-style")?.remove();
-      document.getElementById("print-header")?.remove();
-      el("chart-wrap").style.transform="scale("+prevZoom/100+")";
-      el("chart-scroll").scrollLeft=prevScroll.left;
-      el("chart-scroll").scrollTop=prevScroll.top;
-      btn.textContent="⬇ Export PDF";
-      btn.disabled=false;
-    },1000);
-  },300);
+  btn.textContent="⬇ Export PDF";
+  btn.disabled=false;
 }
 let darkMode=localStorage.getItem("darkMode")==="1";
 function applyDark(){

@@ -104,9 +104,8 @@ header h1{font-size:15px;font-weight:600;flex:1;color:var(--blue)}
       <button id="refresh-btn">↺ Refresh</button>
       <button id="expand-btn">⊞ Expand all</button>
       <button id="collapse-btn">⊟ Collapse all</button>
-      <span id="people-count"></span>
-    </div>
-    <div id="dept-legend" style="display:none;padding:0 24px 12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+      <button id="compact-btn">⊡ Compact</button>
+      <span id="people-count"></span> style="display:none;padding:0 24px 12px;display:flex;flex-wrap:wrap;gap:8px;"></div>
     <div id="chart-scroll"><div id="chart-wrap"><div id="chart-canvas"></div></div></div>
     <div id="search-results"></div>
   </div>
@@ -153,7 +152,7 @@ function showErr(m){ g("error-box").textContent=m; show("error-box"); }
 function setMsg(m){ g("status-msg").textContent=m; }
 
 // ── State ─────────────────────────────────────────────────────
-let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100;
+let allUsers=[], byId={}, roots=[], expanded=new Set(), selectedId=null, zoomLevel=100, compactMode=false;
 
 // ── MSAL ──────────────────────────────────────────────────────
 const msalInstance = new msal.PublicClientApplication({
@@ -235,9 +234,9 @@ function renderChart(){
   canvas.innerHTML="";
   const pos={};
   let tx=0;
-  roots.forEach(r=>{ assignPos(r,tx,0,pos); tx+=subW(r)+H_GAP*2; });
+  roots.forEach(r=>{ assignPos(r,tx,0,pos); tx+=subW(r)+HG()*2; });
   let mxX=0,mxY=0;
-  Object.values(pos).forEach(p=>{ mxX=Math.max(mxX,p.x+NODE_W); mxY=Math.max(mxY,p.y+NODE_H); });
+  Object.values(pos).forEach(p=>{ mxX=Math.max(mxX,p.x+NW()); mxY=Math.max(mxY,p.y+NH()); });
   canvas.style.width=(mxX+80)+"px";
   canvas.style.height=(mxY+80)+"px";
 
@@ -267,20 +266,30 @@ function renderChart(){
     const p=pos[node.id]; if(!p) return;
     const card=document.createElement("div");
     const dc=getDeptColor(node.department);
-    card.className="node-card"+(selectedId===node.id?" selected":"")+(!node.managerId?" root-node":"");
-    card.style.cssText=`left:${p.x}px;top:${p.y}px;${dc?`background:${dc.bg};border-color:${dc.border};`:""}`;
+    card.className="node-card"+(selectedId===node.id?" selected":"")+(!node.managerId?" root-node":"")+(compactMode?" compact":"");
+    card.style.cssText=`left:${p.x}px;top:${p.y}px;width:${NW()}px;min-height:${NH()}px;${dc?`background:${dc.bg};border-color:${dc.border};`:""}${compactMode?"padding:6px 8px;gap:6px;":""}`;
 
     const av=document.createElement("div");
     av.className="node-avatar";
-    av.style.background=dc?dc.text:aColor(node.id);
+    av.style.cssText=`background:${dc?dc.text:aColor(node.id)};${compactMode?"width:26px;height:26px;font-size:9px;":""}`;
     av.textContent=initials(node.displayName);
 
-    const tx=document.createElement("div");
-    tx.className="node-text";
+    const tx2=document.createElement("div");
+    tx2.className="node-text";
     const nm=document.createElement("div");
     nm.className="node-name";
-    nm.style.color=dc?dc.text:"";
+    nm.style.cssText=`${dc?"color:"+dc.text+";":""}${compactMode?"font-size:11px;":""}`;
     nm.textContent=node.displayName;
+    tx2.appendChild(nm);
+
+    if(!compactMode){
+      const tl=document.createElement("div");
+      tl.className="node-title";
+      tl.textContent=node.jobTitle||node.department||"—";
+      tx2.appendChild(tl);
+    }
+
+    card.appendChild(av); card.appendChild(tx2);
     const tl=document.createElement("div");
     tl.className="node-title";
     tl.textContent=node.jobTitle||node.department||"—";
@@ -302,7 +311,7 @@ function renderChart(){
     if(node.reports.length){
       const btn=document.createElement("button");
       btn.className="toggle-btn";
-      btn.style.cssText=`left:${p.x+NODE_W/2-TOGGLE_R}px;top:${p.y+NODE_H-TOGGLE_R}px;`;
+      btn.style.cssText=`left:${p.x+NW()/2-TOGGLE_R}px;top:${p.y+NH()-TOGGLE_R}px;`;
       btn.textContent=expanded.has(node.id)?"−":"+"+node.reports.length;
       (function(nid){
         btn.addEventListener("click",function(e){
@@ -555,7 +564,15 @@ g("zoom-slider").addEventListener("input",e=>setZoom(Number(e.target.value),true
 g("fit-btn").addEventListener("click",fitToScreen);
 g("spotlight-close").addEventListener("click",()=>hide("spotlight-overlay"));
 g("spotlight-overlay").addEventListener("click",function(e){ if(e.target===g("spotlight-overlay")) hide("spotlight-overlay"); });
-g("chart-scroll").addEventListener("scroll",updateMinimap);
+g("compact-btn").addEventListener("click",function(){
+  compactMode=!compactMode;
+  g("compact-btn").textContent=compactMode?"⊞ Full":"⊡ Compact";
+  g("compact-btn").style.background=compactMode?"var(--blue)":"";
+  g("compact-btn").style.color=compactMode?"#fff":"";
+  g("compact-btn").style.borderColor=compactMode?"var(--blue)":"";
+  renderChart();
+  setTimeout(fitToScreen,50);
+});
 g("chart-scroll").addEventListener("wheel",function(e){ if(e.ctrlKey||e.metaKey){ e.preventDefault(); setZoom(zoomLevel+(e.deltaY<0?10:-10)); } },{passive:false});
 let st; g("search-bar").addEventListener("input",e=>{ clearTimeout(st); st=setTimeout(()=>doSearch(e.target.value),200); });
 

@@ -304,9 +304,9 @@ function renderChart(){
       avatar.style.backgroundImage="url("+photo+")";
       avatar.style.backgroundSize="cover";
       avatar.style.backgroundPosition="center";
-      avatar.style.background=dc?dc.text:aColor(node.id);
+      avatar.style.backgroundColor=dc?dc.text:aColor(node.id);
     } else {
-      avatar.style.background=dc?dc.text:aColor(node.id);
+      avatar.style.backgroundColor=dc?dc.text:aColor(node.id);
       avatar.textContent=initials(node.displayName);
     }
     card.appendChild(avatar);
@@ -395,9 +395,9 @@ function openSpotlight(id){
     av.style.backgroundImage="url("+spPhoto+")";
     av.style.backgroundSize="cover";
     av.style.backgroundPosition="center";
-    av.style.background=aColor(u.id);
+    av.style.backgroundColor=aColor(u.id);
   } else {
-    av.style.background=aColor(u.id);
+    av.style.backgroundColor=aColor(u.id);
     av.textContent=initials(u.displayName);
   }
   sc.appendChild(av);

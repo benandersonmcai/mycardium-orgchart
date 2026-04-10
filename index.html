@@ -702,6 +702,7 @@ el("dark-btn").addEventListener("click",function(){
 });
 el("sign-in-btn").addEventListener("click",signIn);
 el("sign-out-btn").addEventListener("click",signOut);
+el("export-btn").addEventListener("click",exportPDF);
 el("refresh-btn").addEventListener("click",loadData);
 el("expand-btn").addEventListener("click",function(){ function ea(n){ expanded.add(n.id); n.reports.forEach(ea); } roots.forEach(ea); renderChart(); });
 el("collapse-btn").addEventListener("click",function(){ expanded.clear(); roots.forEach(r=>expanded.add(r.id)); selectedId=null; hide("spotlight-overlay"); renderChart(); });
